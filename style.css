@@ -103,6 +103,7 @@ header {
   padding: 4px;
   border-radius: 10px;
   gap: 4px;
+  flex-wrap: wrap;
 }
 
 .nav-tab {
@@ -171,7 +172,6 @@ button.btn-primary:hover {
   background: var(--primary-hover);
 }
 
-/* Tasto Collegamento File Diretto */
 .btn-link-file {
   background: #f0fdf4;
   border-color: #86efac;
@@ -449,6 +449,13 @@ form {
   gap: 6px;
 }
 
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 42px;
+}
+
 label {
   font-size: 0.8125rem;
   font-weight: 600;
@@ -477,7 +484,7 @@ input:focus, select:focus {
 }
 
 /* ==========================================
-   LISTE TRANSAZIONI & CATEGORIE
+   LISTE TRANSAZIONI, CATEGORIE & ABBONAMENTI
    ========================================== */
 .transactions-list {
   display: flex;
@@ -572,6 +579,21 @@ body.dark .tx-btn.btn-danger:hover {
   font-size: 0.8125rem;
   font-weight: 500;
   color: var(--text-muted);
+}
+
+/* Badge giorno del mese per abbonamenti */
+.renewal-badge {
+  font-size: 0.75rem;
+  padding: 2px 8px;
+  border-radius: 20px;
+  background: #e0e7ff;
+  color: #4338ca;
+  font-weight: 600;
+}
+
+body.dark .renewal-badge {
+  background: #312e81;
+  color: #c7d2fe;
 }
 
 /* Barra Filtri */

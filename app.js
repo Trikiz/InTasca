@@ -10,7 +10,7 @@ if ('serviceWorker' in navigator) {
 }
 
 // ==========================================
-// STATO DELL'APPLICAZIONE
+// STATO DELL'APPLICAZIONE (InTasca)
 // ==========================================
 const DEFAULT_CATEGORIES = [
   { id: 'cibo', name: 'Spesa & Cibo', icon: 'shopping-cart', color: '#f97316' },
@@ -28,14 +28,13 @@ const MONTH_NAMES = [
   'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre'
 ];
 
-// Inizializzazione: nessun dato fittizio, parte a zero!
 let state = {
   transactions: [],
   categories: DEFAULT_CATEGORIES,
+  subscriptions: [],
   darkMode: false
 };
 
-// Riferimento al file fisico aperto sul computer (File System Access API)
 let fileHandle = null;
 
 const currentDate = new Date();
@@ -51,28 +50,85 @@ let yearlyChartInstance = null;
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
 
-  // Carica da memoria locale se già usata in precedenza
-  const saved = localStorage.getItem('mie_finanze_data');
+  const saved = localStorage.getItem('intasca_data') || localStorage.getItem('mie_finanze_data');
   if (saved) {
     try {
       const parsed = JSON.parse(saved);
       state.transactions = parsed.transactions || [];
       state.categories = parsed.categories || DEFAULT_CATEGORIES;
+      state.subscriptions = parsed.subscriptions || [];
       state.darkMode = !!parsed.darkMode;
     } catch (e) {
       state.transactions = [];
+      state.subscriptions = [];
     }
   }
+
+  // Controlla se ci sono abbonamenti da inserire automaticamente (Catch-up)
+  checkAndApplySubscriptions();
 
   applyTheme(state.darkMode);
   setupNavigation();
   setupPeriodSelector();
   setupFilters();
   setupFileSystemSync();
+  setupSubscriptionForm();
   populateCategorySelects();
   initCharts();
   refreshApp();
 });
+
+// ==========================================
+// CATCH-UP AUTOMATICO ABBONAMENTI
+// ==========================================
+function checkAndApplySubscriptions() {
+  if (!state.subscriptions || state.subscriptions.length === 0) return;
+
+  const now = new Date();
+  const currentY = now.getFullYear();
+  const currentM = now.getMonth();
+  const currentD = now.getDate();
+
+  let addedCount = 0;
+
+  state.subscriptions.forEach(sub => {
+    if (!sub.autoAdd) return;
+
+    // Se l'abbonamento è mensile
+    if (sub.frequency === 'monthly') {
+      const targetDay = Math.min(sub.billingDay, new Date(currentY, currentM + 1, 0).getDate());
+      
+      // Se oggi è uguale o successivo al giorno di rinnovo del mese corrente
+      if (currentD >= targetDay) {
+        const expectedDateStr = `${currentY}-${String(currentM + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
+        
+        // Verifica se è già stato registrato questo mese
+        const alreadyExists = state.transactions.some(tx => 
+          tx.subscriptionId === sub.id && tx.date.startsWith(`${currentY}-${String(currentM + 1).padStart(2, '0')}`)
+        );
+
+        if (!alreadyExists) {
+          state.transactions.unshift({
+            id: 'sub_tx_' + Date.now().toString() + Math.random().toString(36).substr(2, 4),
+            subscriptionId: sub.id,
+            date: expectedDateStr,
+            type: 'expense',
+            amount: sub.amount,
+            category: sub.category,
+            note: `[Rinnovo] ${sub.name}`
+          });
+          sub.lastGenerated = expectedDateStr;
+          addedCount++;
+        }
+      }
+    }
+  });
+
+  if (addedCount > 0) {
+    saveToStorage();
+    console.log(`InTasca: Generati automaticamente ${addedCount} rinnovi di abbonamento.`);
+  }
+}
 
 // ==========================================
 // SELETTORE PERIODO (MESE / ANNO)
@@ -135,7 +191,7 @@ function refreshDashboardOnly() {
 }
 
 // ==========================================
-// NAVIGAZIONE TRA SCHERMATE (SPA)
+// NAVIGAZIONE SPA
 // ==========================================
 function setupNavigation() {
   const tabs = document.querySelectorAll('.nav-tab');
@@ -165,6 +221,8 @@ function switchView(viewName) {
     renderAllTransactions();
   } else if (viewName === 'categories') {
     renderCategoriesList();
+  } else if (viewName === 'subscriptions') {
+    renderSubscriptionsList();
   }
   lucide.createIcons();
 }
@@ -216,9 +274,8 @@ function formatCurrency(num) {
   return num.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
 }
 
-// Salva sia su localStorage che DIRETTAMENTE sul file fisico collegato
 async function saveToStorage() {
-  localStorage.setItem('mie_finanze_data', JSON.stringify(state));
+  localStorage.setItem('intasca_data', JSON.stringify(state));
   await writeDirectlyToFile();
 }
 
@@ -226,7 +283,8 @@ function populateCategorySelects() {
   const selects = [
     document.getElementById('txCategory'),
     document.getElementById('editTxCategory'),
-    document.getElementById('filterCategory')
+    document.getElementById('filterCategory'),
+    document.getElementById('subCategory')
   ];
 
   selects.forEach(select => {
@@ -250,12 +308,13 @@ function refreshApp() {
   renderDashboardTransactions();
   renderAllTransactions();
   renderCategoriesList();
+  renderSubscriptionsList();
   updateCharts();
   lucide.createIcons();
 }
 
 // ==========================================
-// CALCOLO STATISTICHE
+// CALCOLO STATISTICHE DASHBOARD
 // ==========================================
 function renderStats() {
   let totalBalance = 0;
@@ -549,6 +608,107 @@ window.deleteCategory = function(catId) {
 };
 
 // ==========================================
+// GESTIONE ABBONAMENTI & SPESE RICORRENTI
+// ==========================================
+function setupSubscriptionForm() {
+  document.getElementById('newSubForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const name = document.getElementById('subName').value.trim();
+    const amount = parseFloat(document.getElementById('subAmount').value);
+    const category = document.getElementById('subCategory').value;
+    const frequency = document.getElementById('subFrequency').value;
+    const billingDay = parseInt(document.getElementById('subBillingDay').value);
+    const autoAdd = document.getElementById('subAutoAdd').checked;
+
+    if (!name || isNaN(amount) || amount <= 0) return;
+
+    const newSub = {
+      id: 'sub_' + Date.now().toString(),
+      name,
+      amount,
+      category,
+      frequency,
+      billingDay,
+      autoAdd,
+      createdAt: new Date().toISOString()
+    };
+
+    if (!state.subscriptions) state.subscriptions = [];
+    state.subscriptions.push(newSub);
+
+    document.getElementById('subName').value = '';
+    document.getElementById('subAmount').value = '';
+    
+    // Controlla subito se la spesa di questo mese va aggiunta
+    checkAndApplySubscriptions();
+    refreshApp();
+  });
+}
+
+function renderSubscriptionsList() {
+  const listEl = document.getElementById('subListContainer');
+  const countEl = document.getElementById('subListCount');
+  const monthlyTotalEl = document.getElementById('subMonthlyTotal');
+  const yearlyTotalEl = document.getElementById('subYearlyTotal');
+  const activeCountEl = document.getElementById('subActiveCount');
+
+  if (!state.subscriptions) state.subscriptions = [];
+  listEl.innerHTML = '';
+
+  let monthlySum = 0;
+  state.subscriptions.forEach(sub => {
+    monthlySum += (sub.frequency === 'monthly') ? sub.amount : (sub.amount / 12);
+  });
+
+  const yearlySum = monthlySum * 12;
+
+  monthlyTotalEl.textContent = formatCurrency(monthlySum);
+  yearlyTotalEl.textContent = formatCurrency(yearlySum);
+  activeCountEl.textContent = state.subscriptions.length;
+  countEl.textContent = `${state.subscriptions.length} attiv${state.subscriptions.length === 1 ? 'o' : 'i'}`;
+
+  if (state.subscriptions.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">Nessun abbonamento configurato finora.</div>';
+    return;
+  }
+
+  state.subscriptions.forEach(sub => {
+    const cat = state.categories.find(c => c.id === sub.category) || { name: 'Altro', icon: 'repeat', color: '#4f46e5' };
+    const item = document.createElement('div');
+    item.className = 'tx-item';
+    item.innerHTML = `
+      <div class="tx-left">
+        <div class="tx-cat-badge" style="background-color: ${cat.color};">
+          <i data-lucide="${cat.icon || 'repeat'}" style="width: 20px; height: 20px;"></i>
+        </div>
+        <div class="tx-info">
+          <h4>${sub.name}</h4>
+          <span>${cat.name} • Rinnovo il ${sub.billingDay} del mese (${sub.frequency === 'monthly' ? 'Mensile' : 'Annuale'})</span>
+        </div>
+      </div>
+      <div class="tx-right">
+        <span class="renewal-badge">${sub.autoAdd ? 'Auto: Sì' : 'Auto: No'}</span>
+        <span class="tx-amount expense">
+          -${formatCurrency(sub.amount)}
+        </span>
+        <button class="tx-btn btn-danger" onclick="deleteSubscription('${sub.id}')" title="Elimina Abbonamento">
+          <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
+        </button>
+      </div>
+    `;
+    listEl.appendChild(item);
+  });
+  lucide.createIcons();
+}
+
+window.deleteSubscription = function(subId) {
+  if (confirm('Vuoi davvero eliminare questo abbonamento? I movimenti passati già inseriti rimarranno intatti.')) {
+    state.subscriptions = state.subscriptions.filter(s => s.id !== subId);
+    refreshApp();
+  }
+};
+
+// ==========================================
 // GRAFICI CON CHART.JS
 // ==========================================
 function initCharts() {
@@ -688,20 +848,18 @@ function updateCharts() {
 }
 
 // ==========================================
-// FILE SYSTEM ACCESS & SINCRONIZZAZIONE SU DISCO
+// FILE SYSTEM ACCESS & SYNC
 // ==========================================
 function setupFileSystemSync() {
   const linkFileBtn = document.getElementById('linkFileBtn');
   const unlinkFileBtn = document.getElementById('unlinkFileBtn');
 
-  // Pulsante "Collega File"
   linkFileBtn.addEventListener('click', async () => {
-    // Se il browser supporta File System Access API (Chrome, Edge, Brave, Opera)
     if ('showOpenFilePicker' in window) {
       try {
         const [handle] = await window.showOpenFilePicker({
           types: [{
-            description: 'File Finanze JSON',
+            description: 'File InTasca JSON',
             accept: { 'application/json': ['.json'] }
           }],
           multiple: false
@@ -716,10 +874,12 @@ function setupFileSystemSync() {
           if (parsed.transactions && Array.isArray(parsed.transactions)) {
             state.transactions = parsed.transactions;
             if (parsed.categories) state.categories = parsed.categories;
+            if (parsed.subscriptions) state.subscriptions = parsed.subscriptions;
             populateCategorySelects();
           }
         }
         setConnectedFileUI(fileHandle.name);
+        checkAndApplySubscriptions();
         refreshApp();
       } catch (err) {
         if (err.name !== 'AbortError') {
@@ -728,12 +888,10 @@ function setupFileSystemSync() {
         }
       }
     } else {
-      // Fallback: apri normale input file per browser non supportati (Safari / Mobile)
       document.getElementById('fileInput').click();
     }
   });
 
-  // Pulsante "Scollega"
   unlinkFileBtn.addEventListener('click', () => {
     fileHandle = null;
     document.getElementById('fileNoticeBar').style.display = 'none';
@@ -749,7 +907,6 @@ function setConnectedFileUI(fileName) {
   lucide.createIcons();
 }
 
-// Scrive direttamente nel file fisico ogni volta che aggiungi/elimini/modifichi
 async function writeDirectlyToFile() {
   if (!fileHandle) return;
   try {
@@ -757,22 +914,22 @@ async function writeDirectlyToFile() {
     await writable.write(JSON.stringify(state, null, 2));
     await writable.close();
   } catch (err) {
-    console.warn('Scrittura automatica su file fallita o permessi scaduti:', err);
+    console.warn('Scrittura su file fallita o permessi scaduti:', err);
   }
 }
 
-// Esportazione manuale JSON (Fallback universale)
+// Esportazione manuale JSON
 document.getElementById('exportBtn').addEventListener('click', () => {
   const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
   const downloadAnchor = document.createElement('a');
   downloadAnchor.setAttribute("href", dataStr);
-  downloadAnchor.setAttribute("download", `finanze_${new Date().toISOString().split('T')[0]}.json`);
+  downloadAnchor.setAttribute("download", `intasca_${new Date().toISOString().split('T')[0]}.json`);
   document.body.appendChild(downloadAnchor);
   downloadAnchor.click();
   downloadAnchor.remove();
 });
 
-// Importazione manuale JSON (Fallback universale)
+// Importazione manuale JSON
 document.getElementById('importBtn').addEventListener('click', () => {
   document.getElementById('fileInput').click();
 });
@@ -788,13 +945,15 @@ document.getElementById('fileInput').addEventListener('change', (event) => {
       if (imported.transactions && Array.isArray(imported.transactions)) {
         state.transactions = imported.transactions;
         if (imported.categories) state.categories = imported.categories;
+        if (imported.subscriptions) state.subscriptions = imported.subscriptions;
         if (typeof imported.darkMode !== 'undefined') {
           state.darkMode = imported.darkMode;
           applyTheme(state.darkMode);
         }
         populateCategorySelects();
+        checkAndApplySubscriptions();
         refreshApp();
-        alert('File caricato con successo!');
+        alert('Dati caricati con successo!');
       } else {
         alert('Formato file non valido.');
       }

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>InTasca - Gestione Finanziaria Personale</title>
+  <title>InTasca - Gestione Spese</title>
   
   <!-- PWA Meta tags -->
   <link rel="manifest" href="manifest.json">
@@ -32,7 +32,7 @@
         </div>
         <div>
           <h1>InTasca</h1>
-          <p class="subtitle">Gestione personale local-first</p>
+          <p class="subtitle">Finanze personali local-first</p>
         </div>
       </div>
 
@@ -47,25 +47,28 @@
         <button class="nav-tab" data-view="categories">
           <i data-lucide="tags"></i> Categorie
         </button>
+        <button class="nav-tab" data-view="subscriptions">
+          <i data-lucide="repeat"></i> Abbonamenti
+        </button>
       </nav>
 
       <!-- Azioni File e Tema -->
       <div class="header-actions">
         <input type="file" id="fileInput" accept=".json">
         
-        <!-- Collegamento File Diretto (File System Access API) -->
+        <!-- Collegamento File Diretto -->
         <button id="linkFileBtn" type="button" class="btn-link-file" title="Collega un file sul tuo computer (es. dentro Google Drive / Documenti) per salvare in automatico">
           <i data-lucide="folder-sync"></i>
           <span id="linkFileText">Collega File</span>
         </button>
 
-        <!-- Carica Manuale (per smartphone o browser standard) -->
-        <button id="importBtn" type="button" title="Carica un file JSON dal dispositivo">
+        <!-- Carica Manuale -->
+        <button id="importBtn" type="button" title="Carica file JSON">
           <i data-lucide="upload"></i> <span class="btn-text">Carica</span>
         </button>
 
         <!-- Salva Copia Manuale -->
-        <button id="exportBtn" type="button" class="btn-primary" title="Scarica una copia del file JSON">
+        <button id="exportBtn" type="button" class="btn-primary" title="Scarica copia JSON">
           <i data-lucide="download"></i> <span class="btn-text">Esporta</span>
         </button>
         
@@ -76,11 +79,11 @@
       </div>
     </header>
 
-    <!-- Barra di notifica sincronizzazione file attivo -->
+    <!-- Barra notifica sincronizzazione file attivo -->
     <div id="fileNoticeBar" class="file-notice-bar" style="display: none;">
       <div class="notice-content">
         <i data-lucide="check-circle-2"></i>
-        <span>File sincronizzato: <strong id="connectedFileName">finanze.json</strong>. Ogni modifica viene salvata all'istante sul disco.</span>
+        <span>File sincronizzato: <strong id="connectedFileName">intasca.json</strong>. Modifiche salvate all'istante sul disco.</span>
       </div>
       <button type="button" class="btn-unlink" id="unlinkFileBtn" title="Scollega file">Scollega</button>
     </div>
@@ -90,7 +93,7 @@
     <!-- ========================================== -->
     <section id="view-dashboard" class="app-view active">
       
-      <!-- Barra Selettore Periodo (Mese / Anno) -->
+      <!-- Selettore Periodo -->
       <div class="period-selector-bar">
         <div class="period-navigator">
           <button id="prevMonthBtn" class="btn-icon-only" title="Mese precedente">
@@ -98,7 +101,7 @@
           </button>
           <div class="period-display">
             <i data-lucide="calendar"></i>
-            <span id="periodLabel">Ottobre 2026</span>
+            <span id="periodLabel">Mese Anno</span>
           </div>
           <button id="nextMonthBtn" class="btn-icon-only" title="Mese successivo">
             <i data-lucide="chevron-right"></i>
@@ -147,7 +150,6 @@
 
       <!-- Main Grid: Form + Grafici -->
       <div class="main-grid">
-        <!-- Colonna Sinistra -->
         <div class="col-flex">
           <!-- Card Nuova Spesa -->
           <div class="card">
@@ -202,7 +204,6 @@
           </div>
         </div>
 
-        <!-- Colonna Destra (Grafici) -->
         <div class="col-flex">
           <div class="card">
             <div class="card-title">
@@ -237,7 +238,6 @@
           <span id="allTxCount" class="badge-count">0 voci</span>
         </div>
 
-        <!-- Filtri di ricerca -->
         <div class="filters-bar">
           <div class="search-input-box">
             <i data-lucide="search"></i>
@@ -255,7 +255,6 @@
           </div>
         </div>
 
-        <!-- Lista completa filtrata -->
         <div class="transactions-list full-list" id="allTxList"></div>
       </div>
     </section>
@@ -265,7 +264,6 @@
     <!-- ========================================== -->
     <section id="view-categories" class="app-view">
       <div class="main-grid">
-        <!-- Crea Nuova Categoria -->
         <div class="card">
           <div class="card-title">
             <span>Nuova Categoria</span>
@@ -307,13 +305,107 @@
           </form>
         </div>
 
-        <!-- Elenco Categorie Esistenti -->
         <div class="card">
           <div class="card-title">
             <span>Categorie Attive</span>
             <span id="catCount" class="badge-count">0 categorie</span>
           </div>
           <div class="categories-list" id="catListContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 4: ABBONAMENTI & SPESE FISSE         -->
+    <!-- ========================================== -->
+    <section id="view-subscriptions" class="app-view">
+      <!-- KPI Abbonamenti -->
+      <div class="summary-grid">
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Costo Fisso Mensile</div>
+            <div class="stat-val val-expense" id="subMonthlyTotal">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-expense"><i data-lucide="repeat"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Proiezione Annuale</div>
+            <div class="stat-val" id="subYearlyTotal" style="color: #d97706;">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-avg"><i data-lucide="calendar-clock"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Servizi / Spese Attive</div>
+            <div class="stat-val val-balance" id="subActiveCount">0</div>
+          </div>
+          <div class="stat-icon icon-balance"><i data-lucide="layers"></i></div>
+        </div>
+      </div>
+
+      <div class="main-grid">
+        <!-- Form Aggiungi Abbonamento -->
+        <div class="card">
+          <div class="card-title">
+            <span>Nuovo Abbonamento / Spesa Ricorrente</span>
+            <i data-lucide="plus-circle" class="icon-primary"></i>
+          </div>
+          <form id="newSubForm">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="subName">Nome Servizio / Spesa</label>
+                <input type="text" id="subName" placeholder="es. Netflix, Spotify, Palestra, Fibra" required>
+              </div>
+              <div class="form-group">
+                <label for="subAmount">Importo (€)</label>
+                <input type="number" id="subAmount" step="0.01" min="0.01" placeholder="es. 12,99" required>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="subCategory">Categoria</label>
+                <select id="subCategory"></select>
+              </div>
+              <div class="form-group">
+                <label for="subFrequency">Frequenza</label>
+                <select id="subFrequency">
+                  <option value="monthly">Mensile</option>
+                  <option value="yearly">Annuale</option>
+                </select>
+              </div>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="subBillingDay">Giorno del rinnovo (1-31)</label>
+                <input type="number" id="subBillingDay" min="1" max="31" value="1" required>
+              </div>
+              <div class="form-group">
+                <label for="subAutoAdd">Aggiunta Automatica</label>
+                <div class="checkbox-container">
+                  <input type="checkbox" id="subAutoAdd" checked style="width: 20px; height: 20px; cursor: pointer;">
+                  <span style="font-size: 0.8125rem; color: var(--text-muted);">Registra da sola la spesa ogni mese</span>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary btn-block">
+              <i data-lucide="plus"></i> Salva Spesa Ricorrente
+            </button>
+          </form>
+        </div>
+
+        <!-- Lista Abbonamenti Attivi -->
+        <div class="card">
+          <div class="card-title">
+            <span>Le tue Spese Ricorrenti</span>
+            <span id="subListCount" class="badge-count">0 attive</span>
+          </div>
+          <div class="transactions-list full-list" id="subListContainer"></div>
         </div>
       </div>
     </section>

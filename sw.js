@@ -1,4 +1,4 @@
-const CACHE_NAME = 'miefinanze-v1';
+const CACHE_NAME = 'intasca-v2';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -11,7 +11,6 @@ const ASSETS_TO_CACHE = [
   'https://cdn.jsdelivr.net/npm/chart.js'
 ];
 
-// Installazione Service Worker e cache degli asset
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
@@ -21,7 +20,6 @@ self.addEventListener('install', (event) => {
   self.skipWaiting();
 });
 
-// Attivazione e pulizia vecchie cache
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) => {
@@ -37,7 +35,6 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Intercettazione richieste di rete: Cache First, poi Network
 self.addEventListener('fetch', (event) => {
   event.respondWith(
     caches.match(event.request).then((cachedResponse) => {
@@ -45,7 +42,6 @@ self.addEventListener('fetch', (event) => {
         return cachedResponse;
       }
       return fetch(event.request).catch(() => {
-        // Fallback per navigazione offline
         if (event.request.mode === 'navigate') {
           return caches.match('./index.html');
         }
