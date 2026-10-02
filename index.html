@@ -1,0 +1,378 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>InTasca - Gestione Finanziaria Personale</title>
+  
+  <!-- PWA Meta tags -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#4f46e5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="InTasca">
+  <link rel="apple-touch-icon" href="icon-192.png">
+
+  <!-- CSS personalizzato -->
+  <link rel="stylesheet" href="style.css">
+  
+  <!-- Lucide Icons -->
+  <script src="https://unpkg.com/lucide@latest"></script>
+  <!-- Chart.js -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+
+  <div class="container">
+    <!-- Header Principale -->
+    <header>
+      <div class="brand">
+        <div class="brand-icon">
+          <i data-lucide="wallet"></i>
+        </div>
+        <div>
+          <h1>InTasca</h1>
+          <p class="subtitle">Gestione personale local-first</p>
+        </div>
+      </div>
+
+      <!-- Barra di Navigazione Schermate (Tab) -->
+      <nav class="nav-tabs">
+        <button class="nav-tab active" data-view="dashboard">
+          <i data-lucide="layout-dashboard"></i> Dashboard
+        </button>
+        <button class="nav-tab" data-view="transactions">
+          <i data-lucide="receipt"></i> Movimenti
+        </button>
+        <button class="nav-tab" data-view="categories">
+          <i data-lucide="tags"></i> Categorie
+        </button>
+      </nav>
+
+      <!-- Azioni File e Tema -->
+      <div class="header-actions">
+        <input type="file" id="fileInput" accept=".json">
+        
+        <!-- Collegamento File Diretto (File System Access API) -->
+        <button id="linkFileBtn" type="button" class="btn-link-file" title="Collega un file sul tuo computer (es. dentro Google Drive / Documenti) per salvare in automatico">
+          <i data-lucide="folder-sync"></i>
+          <span id="linkFileText">Collega File</span>
+        </button>
+
+        <!-- Carica Manuale (per smartphone o browser standard) -->
+        <button id="importBtn" type="button" title="Carica un file JSON dal dispositivo">
+          <i data-lucide="upload"></i> <span class="btn-text">Carica</span>
+        </button>
+
+        <!-- Salva Copia Manuale -->
+        <button id="exportBtn" type="button" class="btn-primary" title="Scarica una copia del file JSON">
+          <i data-lucide="download"></i> <span class="btn-text">Esporta</span>
+        </button>
+        
+        <!-- Toggle Dark Mode -->
+        <button id="themeToggleBtn" type="button" class="btn-icon-only" title="Cambia tema Chiaro/Scuro">
+          <i id="themeIcon" data-lucide="moon"></i>
+        </button>
+      </div>
+    </header>
+
+    <!-- Barra di notifica sincronizzazione file attivo -->
+    <div id="fileNoticeBar" class="file-notice-bar" style="display: none;">
+      <div class="notice-content">
+        <i data-lucide="check-circle-2"></i>
+        <span>File sincronizzato: <strong id="connectedFileName">finanze.json</strong>. Ogni modifica viene salvata all'istante sul disco.</span>
+      </div>
+      <button type="button" class="btn-unlink" id="unlinkFileBtn" title="Scollega file">Scollega</button>
+    </div>
+
+    <!-- ========================================== -->
+    <!-- VISTA 1: DASHBOARD                         -->
+    <!-- ========================================== -->
+    <section id="view-dashboard" class="app-view active">
+      
+      <!-- Barra Selettore Periodo (Mese / Anno) -->
+      <div class="period-selector-bar">
+        <div class="period-navigator">
+          <button id="prevMonthBtn" class="btn-icon-only" title="Mese precedente">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="period-display">
+            <i data-lucide="calendar"></i>
+            <span id="periodLabel">Ottobre 2026</span>
+          </div>
+          <button id="nextMonthBtn" class="btn-icon-only" title="Mese successivo">
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button id="todayBtn" class="btn-sm" title="Torna al mese corrente">
+            Oggi
+          </button>
+        </div>
+        <div class="period-hint" id="periodHint">Riepilogo del periodo selezionato</div>
+      </div>
+
+      <!-- KPI Cards -->
+      <div class="summary-grid">
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Saldo Netto (Totale Storico)</div>
+            <div class="stat-val val-balance" id="totalBalance">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-balance"><i data-lucide="scale"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label" id="expenseCardLabel">Uscite Mese</div>
+            <div class="stat-val val-expense" id="monthExpenses">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-expense"><i data-lucide="trending-down"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label" id="avgCardLabel">Media Spesa Mensile (Anno)</div>
+            <div class="stat-val" id="yearAvgExpense">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-avg"><i data-lucide="bar-chart-2"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label" id="incomeCardLabel">Entrate Mese</div>
+            <div class="stat-val val-income" id="monthIncome">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-income"><i data-lucide="trending-up"></i></div>
+        </div>
+      </div>
+
+      <!-- Main Grid: Form + Grafici -->
+      <div class="main-grid">
+        <!-- Colonna Sinistra -->
+        <div class="col-flex">
+          <!-- Card Nuova Spesa -->
+          <div class="card">
+            <div class="card-title">
+              <span>Registra Movimento</span>
+              <i data-lucide="plus-circle" class="icon-primary"></i>
+            </div>
+            <form id="txForm">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="txType">Tipo</label>
+                  <select id="txType">
+                    <option value="expense">Uscita / Spesa</option>
+                    <option value="income">Entrata / Guadagno</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="txAmount">Importo (€)</label>
+                  <input type="number" id="txAmount" step="0.01" min="0.01" placeholder="es. 25,50" required>
+                </div>
+              </div>
+
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="txDate">Data</label>
+                  <input type="date" id="txDate" required>
+                </div>
+                <div class="form-group">
+                  <label for="txCategory">Categoria</label>
+                  <select id="txCategory"></select>
+                </div>
+              </div>
+
+              <div class="form-group">
+                <label for="txNote">Descrizione / Nota (Opzionale)</label>
+                <input type="text" id="txNote" placeholder="es. Spesa supermercato, Rifornimento...">
+              </div>
+
+              <button type="submit" class="btn-primary btn-block">
+                <i data-lucide="check"></i> Salva Transazione
+              </button>
+            </form>
+          </div>
+
+          <!-- Ultime Transazioni Recenti -->
+          <div class="card">
+            <div class="card-title">
+              <span>Movimenti del Mese Selezionato</span>
+              <button type="button" class="btn-link" onclick="switchView('transactions')">Tutti i movimenti &rarr;</button>
+            </div>
+            <div class="transactions-list" id="dashboardTxList"></div>
+          </div>
+        </div>
+
+        <!-- Colonna Destra (Grafici) -->
+        <div class="col-flex">
+          <div class="card">
+            <div class="card-title">
+              <span id="doughnutChartTitle">Spese per Categoria</span>
+              <i data-lucide="pie-chart" class="text-muted"></i>
+            </div>
+            <div class="chart-box">
+              <canvas id="categoryChart"></canvas>
+            </div>
+          </div>
+
+          <div class="card">
+            <div class="card-title">
+              <span id="barChartTitle">Confronto Mese per Mese</span>
+              <i data-lucide="bar-chart-3" class="text-muted"></i>
+            </div>
+            <div class="chart-box">
+              <canvas id="yearlyChart"></canvas>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 2: TUTTI I MOVIMENTI (FILTRI & EDIT) -->
+    <!-- ========================================== -->
+    <section id="view-transactions" class="app-view">
+      <div class="card">
+        <div class="card-title">
+          <span>Archivio Completo Movimenti</span>
+          <span id="allTxCount" class="badge-count">0 voci</span>
+        </div>
+
+        <!-- Filtri di ricerca -->
+        <div class="filters-bar">
+          <div class="search-input-box">
+            <i data-lucide="search"></i>
+            <input type="text" id="filterSearch" placeholder="Cerca per descrizione o nota...">
+          </div>
+          <div class="filter-selects">
+            <select id="filterCategory">
+              <option value="all">Tutte le categorie</option>
+            </select>
+            <select id="filterType">
+              <option value="all">Tutti i tipi</option>
+              <option value="expense">Solo Uscite</option>
+              <option value="income">Solo Entrate</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Lista completa filtrata -->
+        <div class="transactions-list full-list" id="allTxList"></div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 3: GESTIONE CATEGORIE               -->
+    <!-- ========================================== -->
+    <section id="view-categories" class="app-view">
+      <div class="main-grid">
+        <!-- Crea Nuova Categoria -->
+        <div class="card">
+          <div class="card-title">
+            <span>Nuova Categoria</span>
+            <i data-lucide="tag" class="icon-primary"></i>
+          </div>
+          <form id="newCatForm">
+            <div class="form-group">
+              <label for="catName">Nome Categoria</label>
+              <input type="text" id="catName" placeholder="es. Abbonamenti, Animali, Libri..." required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="catColor">Colore Badge</label>
+                <input type="color" id="catColor" value="#6366f1" class="color-picker-input">
+              </div>
+              <div class="form-group">
+                <label for="catIcon">Icona</label>
+                <select id="catIcon">
+                  <option value="shopping-cart">🛒 Spesa / Carrello</option>
+                  <option value="home">🏠 Casa</option>
+                  <option value="car">🚗 Auto / Trasporti</option>
+                  <option value="utensils">🍽️ Ristorante / Cibo</option>
+                  <option value="heart-pulse">💊 Salute</option>
+                  <option value="shopping-bag">🛍️ Shopping</option>
+                  <option value="gamepad-2">🎮 Giochi / Svago</option>
+                  <option value="tv">📺 Streaming / TV</option>
+                  <option value="plane">✈️ Viaggi</option>
+                  <option value="book-open">📚 Studio / Libri</option>
+                  <option value="banknote">💰 Denaro / Entrate</option>
+                  <option value="tag">🏷️ Tag Generico</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary btn-block">
+              <i data-lucide="plus"></i> Aggiungi Categoria
+            </button>
+          </form>
+        </div>
+
+        <!-- Elenco Categorie Esistenti -->
+        <div class="card">
+          <div class="card-title">
+            <span>Categorie Attive</span>
+            <span id="catCount" class="badge-count">0 categorie</span>
+          </div>
+          <div class="categories-list" id="catListContainer"></div>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- ========================================== -->
+  <!-- MODALE MODIFICA TRANSAZIONE                -->
+  <!-- ========================================== -->
+  <div id="editModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Modifica Movimento</h3>
+        <button type="button" class="btn-close" onclick="closeEditModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="editTxForm">
+        <input type="hidden" id="editTxId">
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editTxType">Tipo</label>
+            <select id="editTxType">
+              <option value="expense">Uscita / Spesa</option>
+              <option value="income">Entrata / Guadagno</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="editTxAmount">Importo (€)</label>
+            <input type="number" id="editTxAmount" step="0.01" min="0.01" required>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editTxDate">Data</label>
+            <input type="date" id="editTxDate" required>
+          </div>
+          <div class="form-group">
+            <label for="editTxCategory">Categoria</label>
+            <select id="editTxCategory"></select>
+          </div>
+        </div>
+
+        <div class="form-group">
+          <label for="editTxNote">Descrizione / Nota</label>
+          <input type="text" id="editTxNote">
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" onclick="closeEditModal()">Annulla</button>
+          <button type="submit" class="btn-primary">Salva Modifiche</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Logica JavaScript -->
+  <script src="app.js"></script>
+</body>
+</html>
