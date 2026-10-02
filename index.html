@@ -44,11 +44,14 @@
         <button class="nav-tab" data-view="transactions">
           <i data-lucide="receipt"></i> Movimenti
         </button>
-        <button class="nav-tab" data-view="categories">
-          <i data-lucide="tags"></i> Categorie
+        <button class="nav-tab" data-view="annual">
+          <i data-lucide="line-chart"></i> Report Annuale
         </button>
         <button class="nav-tab" data-view="subscriptions">
           <i data-lucide="repeat"></i> Abbonamenti
+        </button>
+        <button class="nav-tab" data-view="categories">
+          <i data-lucide="tags"></i> Categorie
         </button>
       </nav>
 
@@ -260,57 +263,110 @@
     </section>
 
     <!-- ========================================== -->
-    <!-- VISTA 3: GESTIONE CATEGORIE               -->
+    <!-- VISTA 3: REPORT ANNUALE CON GRAFICI        -->
     <!-- ========================================== -->
-    <section id="view-categories" class="app-view">
-      <div class="main-grid">
-        <div class="card">
-          <div class="card-title">
-            <span>Nuova Categoria</span>
-            <i data-lucide="tag" class="icon-primary"></i>
+    <section id="view-annual" class="app-view">
+      <!-- Selettore Anno del Report -->
+      <div class="period-selector-bar">
+        <div class="period-navigator">
+          <button id="prevAnnualYearBtn" class="btn-icon-only" title="Anno precedente">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="period-display">
+            <i data-lucide="calendar-range"></i>
+            <span id="annualYearLabel">2026</span>
           </div>
-          <form id="newCatForm">
-            <div class="form-group">
-              <label for="catName">Nome Categoria</label>
-              <input type="text" id="catName" placeholder="es. Abbonamenti, Animali, Libri..." required>
-            </div>
+          <button id="nextAnnualYearBtn" class="btn-icon-only" title="Anno successivo">
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button id="currentYearBtn" class="btn-sm" title="Anno corrente">
+            Anno in corso
+          </button>
+        </div>
+        <div class="period-hint" id="annualHint">Panoramica finanziaria complessiva dell'anno</div>
+      </div>
 
-            <div class="form-row">
-              <div class="form-group">
-                <label for="catColor">Colore Badge</label>
-                <input type="color" id="catColor" value="#6366f1" class="color-picker-input">
-              </div>
-              <div class="form-group">
-                <label for="catIcon">Icona</label>
-                <select id="catIcon">
-                  <option value="shopping-cart">🛒 Spesa / Carrello</option>
-                  <option value="home">🏠 Casa</option>
-                  <option value="car">🚗 Auto / Trasporti</option>
-                  <option value="utensils">🍽️ Ristorante / Cibo</option>
-                  <option value="heart-pulse">💊 Salute</option>
-                  <option value="shopping-bag">🛍️ Shopping</option>
-                  <option value="gamepad-2">🎮 Giochi / Svago</option>
-                  <option value="tv">📺 Streaming / TV</option>
-                  <option value="plane">✈️ Viaggi</option>
-                  <option value="book-open">📚 Studio / Libri</option>
-                  <option value="banknote">💰 Denaro / Entrate</option>
-                  <option value="tag">🏷️ Tag Generico</option>
-                </select>
-              </div>
-            </div>
-
-            <button type="submit" class="btn-primary btn-block">
-              <i data-lucide="plus"></i> Aggiungi Categoria
-            </button>
-          </form>
+      <!-- Totali & KPI Annuali -->
+      <div class="summary-grid">
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Spese Totali Anno</div>
+            <div class="stat-val val-expense" id="annualTotalExpenses">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-expense"><i data-lucide="arrow-down-right"></i></div>
         </div>
 
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Entrate Totali Anno</div>
+            <div class="stat-val val-income" id="annualTotalIncome">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-income"><i data-lucide="arrow-up-right"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Risparmio Netto Anno</div>
+            <div class="stat-val" id="annualNetSavings">0,00 €</div>
+            <span id="annualSavingsRate" class="sub-label-badge">+0% risparmiato</span>
+          </div>
+          <div class="stat-icon icon-balance"><i data-lucide="piggy-bank"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Media Spesa / Mese</div>
+            <div class="stat-val" id="annualAvgMonthly" style="color: #d97706;">0,00 €</div>
+            <span id="annualTopMonth" class="sub-label-badge" style="background: var(--badge-bg); color: var(--text-muted);">Picco: -</span>
+          </div>
+          <div class="stat-icon icon-avg"><i data-lucide="calendar"></i></div>
+        </div>
+      </div>
+
+      <!-- Griglia Grafici Annuali -->
+      <div class="main-grid">
+        <!-- Grafico 1: Entrate vs Spese Mese per Mese -->
         <div class="card">
           <div class="card-title">
-            <span>Categorie Attive</span>
-            <span id="catCount" class="badge-count">0 categorie</span>
+            <span>Flusso Mensile: Entrate vs Spese</span>
+            <i data-lucide="bar-chart-2" class="text-muted"></i>
           </div>
-          <div class="categories-list" id="catListContainer"></div>
+          <div class="chart-box" style="height: 280px;">
+            <canvas id="annualCashflowChart"></canvas>
+          </div>
+        </div>
+
+        <!-- Grafico 2: Spese per Categoria nell'Anno -->
+        <div class="card">
+          <div class="card-title">
+            <span>Spese per Categoria (Totale Anno)</span>
+            <i data-lucide="pie-chart" class="text-muted"></i>
+          </div>
+          <div class="chart-box" style="height: 280px;">
+            <canvas id="annualCategoryChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Grafico 3 a tutta larghezza: Andamento Risparmio / Saldo Cumulativo -->
+      <div class="card">
+        <div class="card-title">
+          <span>Andamento Risparmio Cumulativo nel Corso dell'Anno</span>
+          <i data-lucide="trending-up" class="text-muted"></i>
+        </div>
+        <div class="chart-box" style="height: 260px;">
+          <canvas id="annualCumulativeChart"></canvas>
+        </div>
+      </div>
+
+      <!-- Dettaglio Spese per Categoria con Percentuali -->
+      <div class="card">
+        <div class="card-title">
+          <span>Classifica Spese per Categoria</span>
+          <span id="annualCatRankCount" class="badge-count">0 categorie</span>
+        </div>
+        <div class="annual-category-breakdown" id="annualCategoryBreakdown">
+          <div class="empty-state">Nessuna spesa registrata per quest'anno.</div>
         </div>
       </div>
     </section>
@@ -319,7 +375,6 @@
     <!-- VISTA 4: ABBONAMENTI & SPESE FISSE         -->
     <!-- ========================================== -->
     <section id="view-subscriptions" class="app-view">
-      <!-- KPI Abbonamenti -->
       <div class="summary-grid">
         <div class="card stat-card">
           <div>
@@ -406,6 +461,62 @@
             <span id="subListCount" class="badge-count">0 attive</span>
           </div>
           <div class="transactions-list full-list" id="subListContainer"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA 5: GESTIONE CATEGORIE               -->
+    <!-- ========================================== -->
+    <section id="view-categories" class="app-view">
+      <div class="main-grid">
+        <div class="card">
+          <div class="card-title">
+            <span>Nuova Categoria</span>
+            <i data-lucide="tag" class="icon-primary"></i>
+          </div>
+          <form id="newCatForm">
+            <div class="form-group">
+              <label for="catName">Nome Categoria</label>
+              <input type="text" id="catName" placeholder="es. Abbonamenti, Animali, Libri..." required>
+            </div>
+
+            <div class="form-row">
+              <div class="form-group">
+                <label for="catColor">Colore Badge</label>
+                <input type="color" id="catColor" value="#6366f1" class="color-picker-input">
+              </div>
+              <div class="form-group">
+                <label for="catIcon">Icona</label>
+                <select id="catIcon">
+                  <option value="shopping-cart">🛒 Spesa / Carrello</option>
+                  <option value="home">🏠 Casa</option>
+                  <option value="car">🚗 Auto / Trasporti</option>
+                  <option value="utensils">🍽️ Ristorante / Cibo</option>
+                  <option value="heart-pulse">💊 Salute</option>
+                  <option value="shopping-bag">🛍️ Shopping</option>
+                  <option value="gamepad-2">🎮 Giochi / Svago</option>
+                  <option value="tv">📺 Streaming / TV</option>
+                  <option value="plane">✈️ Viaggi</option>
+                  <option value="book-open">📚 Studio / Libri</option>
+                  <option value="banknote">💰 Denaro / Entrate</option>
+                  <option value="tag">🏷️ Tag Generico</option>
+                </select>
+              </div>
+            </div>
+
+            <button type="submit" class="btn-primary btn-block">
+              <i data-lucide="plus"></i> Aggiungi Categoria
+            </button>
+          </form>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>Categorie Attive</span>
+            <span id="catCount" class="badge-count">0 categorie</span>
+          </div>
+          <div class="categories-list" id="catListContainer"></div>
         </div>
       </div>
     </section>

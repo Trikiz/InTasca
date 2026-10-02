@@ -41,8 +41,17 @@ const currentDate = new Date();
 let selectedYear = currentDate.getFullYear();
 let selectedMonth = currentDate.getMonth();
 
+// Anno selezionato per la vista Report Annuale
+let annualSelectedYear = currentDate.getFullYear();
+
+// Riferimenti grafici Dashboard
 let categoryChartInstance = null;
 let yearlyChartInstance = null;
+
+// Riferimenti grafici Report Annuale
+let annualCashflowChartInstance = null;
+let annualCategoryChartInstance = null;
+let annualCumulativeChartInstance = null;
 
 // ==========================================
 // INIZIALIZZAZIONE
@@ -64,17 +73,18 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
 
-  // Controlla se ci sono abbonamenti da inserire automaticamente (Catch-up)
   checkAndApplySubscriptions();
 
   applyTheme(state.darkMode);
   setupNavigation();
   setupPeriodSelector();
+  setupAnnualPeriodSelector();
   setupFilters();
   setupFileSystemSync();
   setupSubscriptionForm();
   populateCategorySelects();
-  initCharts();
+  initDashboardCharts();
+  initAnnualCharts();
   refreshApp();
 });
 
@@ -94,15 +104,10 @@ function checkAndApplySubscriptions() {
   state.subscriptions.forEach(sub => {
     if (!sub.autoAdd) return;
 
-    // Se l'abbonamento è mensile
     if (sub.frequency === 'monthly') {
       const targetDay = Math.min(sub.billingDay, new Date(currentY, currentM + 1, 0).getDate());
-      
-      // Se oggi è uguale o successivo al giorno di rinnovo del mese corrente
       if (currentD >= targetDay) {
         const expectedDateStr = `${currentY}-${String(currentM + 1).padStart(2, '0')}-${String(targetDay).padStart(2, '0')}`;
-        
-        // Verifica se è già stato registrato questo mese
         const alreadyExists = state.transactions.some(tx => 
           tx.subscriptionId === sub.id && tx.date.startsWith(`${currentY}-${String(currentM + 1).padStart(2, '0')}`)
         );
@@ -126,12 +131,12 @@ function checkAndApplySubscriptions() {
 
   if (addedCount > 0) {
     saveToStorage();
-    console.log(`InTasca: Generati automaticamente ${addedCount} rinnovi di abbonamento.`);
+    console.log(`InTasca: Generati automaticamente ${addedCount} rinnovi.`);
   }
 }
 
 // ==========================================
-// SELETTORE PERIODO (MESE / ANNO)
+// SELETTORE PERIODO DASHBOARD (MESE / ANNO)
 // ==========================================
 function setupPeriodSelector() {
   document.getElementById('prevMonthBtn').addEventListener('click', () => {
@@ -186,8 +191,42 @@ function updatePeriodDisplay() {
 function refreshDashboardOnly() {
   renderStats();
   renderDashboardTransactions();
-  updateCharts();
+  updateDashboardCharts();
   lucide.createIcons();
+}
+
+// ==========================================
+// SELETTORE ANNO REPORT ANNUALE
+// ==========================================
+function setupAnnualPeriodSelector() {
+  document.getElementById('prevAnnualYearBtn').addEventListener('click', () => {
+    annualSelectedYear--;
+    updateAnnualDisplay();
+    renderAnnualReport();
+  });
+
+  document.getElementById('nextAnnualYearBtn').addEventListener('click', () => {
+    annualSelectedYear++;
+    updateAnnualDisplay();
+    renderAnnualReport();
+  });
+
+  document.getElementById('currentYearBtn').addEventListener('click', () => {
+    annualSelectedYear = new Date().getFullYear();
+    updateAnnualDisplay();
+    renderAnnualReport();
+  });
+
+  updateAnnualDisplay();
+}
+
+function updateAnnualDisplay() {
+  document.getElementById('annualYearLabel').textContent = `${annualSelectedYear}`;
+  const now = new Date();
+  const isCurrent = (annualSelectedYear === now.getFullYear());
+  document.getElementById('annualHint').textContent = isCurrent 
+    ? `Panoramica finanziaria complessiva dell'anno in corso (${annualSelectedYear})` 
+    : `Riepilogo e archivio storico delle spese dell'anno ${annualSelectedYear}`;
 }
 
 // ==========================================
@@ -216,9 +255,12 @@ function switchView(viewName) {
   }
 
   if (viewName === 'dashboard') {
-    setTimeout(updateCharts, 50);
+    setTimeout(updateDashboardCharts, 50);
   } else if (viewName === 'transactions') {
     renderAllTransactions();
+  } else if (viewName === 'annual') {
+    renderAnnualReport();
+    setTimeout(updateAnnualCharts, 50);
   } else if (viewName === 'categories') {
     renderCategoriesList();
   } else if (viewName === 'subscriptions') {
@@ -254,6 +296,7 @@ function updateChartsTheme() {
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const gridColor = isDark ? '#334155' : '#f1f5f9';
 
+  // Dashboard charts
   if (yearlyChartInstance) {
     yearlyChartInstance.options.scales.x.ticks.color = textColor;
     yearlyChartInstance.options.scales.y.ticks.color = textColor;
@@ -264,6 +307,26 @@ function updateChartsTheme() {
   if (categoryChartInstance) {
     categoryChartInstance.options.plugins.legend.labels.color = textColor;
     categoryChartInstance.update();
+  }
+
+  // Annual report charts
+  if (annualCashflowChartInstance) {
+    annualCashflowChartInstance.options.scales.x.ticks.color = textColor;
+    annualCashflowChartInstance.options.scales.y.ticks.color = textColor;
+    annualCashflowChartInstance.options.scales.y.grid.color = gridColor;
+    annualCashflowChartInstance.options.plugins.legend.labels.color = textColor;
+    annualCashflowChartInstance.update();
+  }
+  if (annualCategoryChartInstance) {
+    annualCategoryChartInstance.options.plugins.legend.labels.color = textColor;
+    annualCategoryChartInstance.update();
+  }
+  if (annualCumulativeChartInstance) {
+    annualCumulativeChartInstance.options.scales.x.ticks.color = textColor;
+    annualCumulativeChartInstance.options.scales.y.ticks.color = textColor;
+    annualCumulativeChartInstance.options.scales.y.grid.color = gridColor;
+    annualCumulativeChartInstance.options.plugins.legend.labels.color = textColor;
+    annualCumulativeChartInstance.update();
   }
 }
 
@@ -304,12 +367,14 @@ function populateCategorySelects() {
 function refreshApp() {
   saveToStorage();
   updatePeriodDisplay();
+  updateAnnualDisplay();
   renderStats();
   renderDashboardTransactions();
   renderAllTransactions();
+  renderAnnualReport();
   renderCategoriesList();
   renderSubscriptionsList();
-  updateCharts();
+  updateDashboardCharts();
   lucide.createIcons();
 }
 
@@ -490,6 +555,7 @@ document.getElementById('txForm').addEventListener('submit', (e) => {
   const txD = new Date(date);
   selectedYear = txD.getFullYear();
   selectedMonth = txD.getMonth();
+  annualSelectedYear = txD.getFullYear();
 
   refreshApp();
 });
@@ -639,7 +705,6 @@ function setupSubscriptionForm() {
     document.getElementById('subName').value = '';
     document.getElementById('subAmount').value = '';
     
-    // Controlla subito se la spesa di questo mese va aggiunta
     checkAndApplySubscriptions();
     refreshApp();
   });
@@ -709,9 +774,283 @@ window.deleteSubscription = function(subId) {
 };
 
 // ==========================================
-// GRAFICI CON CHART.JS
+// REPORT ANNUALE & ANALISI DETTAGLIATA
 // ==========================================
-function initCharts() {
+function renderAnnualReport() {
+  let annualIncome = 0;
+  let annualExpenses = 0;
+  const monthExpensesArr = new Array(12).fill(0);
+  const monthIncomeArr = new Array(12).fill(0);
+  const activeExpenseMonths = new Set();
+  const categoryTotals = {};
+
+  // Filtra transazioni dell'anno selezionato
+  state.transactions.forEach(tx => {
+    const d = new Date(tx.date);
+    if (d.getFullYear() === annualSelectedYear) {
+      const m = d.getMonth();
+      if (tx.type === 'income') {
+        annualIncome += tx.amount;
+        monthIncomeArr[m] += tx.amount;
+      } else {
+        annualExpenses += tx.amount;
+        monthExpensesArr[m] += tx.amount;
+        activeExpenseMonths.add(m);
+        categoryTotals[tx.category] = (categoryTotals[tx.category] || 0) + tx.amount;
+      }
+    }
+  });
+
+  const netSavings = annualIncome - annualExpenses;
+  const activeMonthsCount = activeExpenseMonths.size || 1;
+  const avgMonthly = annualExpenses / activeMonthsCount;
+
+  // Calcolo tasso di risparmio %
+  let savingsRate = 0;
+  if (annualIncome > 0) {
+    savingsRate = Math.round((netSavings / annualIncome) * 100);
+  }
+
+  // Trova mese con la spesa più alta
+  let peakMonthIndex = -1;
+  let peakAmount = 0;
+  monthExpensesArr.forEach((amt, idx) => {
+    if (amt > peakAmount) {
+      peakAmount = amt;
+      peakMonthIndex = idx;
+    }
+  });
+
+  // Aggiorna KPI Schermata Annuale
+  document.getElementById('annualTotalExpenses').textContent = formatCurrency(annualExpenses);
+  document.getElementById('annualTotalIncome').textContent = formatCurrency(annualIncome);
+  
+  const netEl = document.getElementById('annualNetSavings');
+  netEl.textContent = (netSavings >= 0 ? '+' : '') + formatCurrency(netSavings);
+  netEl.className = 'stat-val ' + (netSavings >= 0 ? 'val-income' : 'val-expense');
+
+  const savingsRateEl = document.getElementById('annualSavingsRate');
+  if (annualIncome > 0) {
+    savingsRateEl.textContent = `${savingsRate >= 0 ? '+' : ''}${savingsRate}% tasso di risparmio`;
+    savingsRateEl.style.display = 'inline-block';
+    savingsRateEl.style.color = savingsRate >= 0 ? '#065f46' : '#991b1b';
+    savingsRateEl.style.background = savingsRate >= 0 ? '#d1fae5' : '#fee2e2';
+  } else {
+    savingsRateEl.style.display = 'none';
+  }
+
+  document.getElementById('annualAvgMonthly').textContent = formatCurrency(avgMonthly);
+
+  const topMonthEl = document.getElementById('annualTopMonth');
+  if (peakMonthIndex >= 0 && peakAmount > 0) {
+    topMonthEl.textContent = `Picco: ${MONTH_NAMES[peakMonthIndex]} (${formatCurrency(peakAmount)})`;
+  } else {
+    topMonthEl.textContent = 'Nessuna spesa';
+  }
+
+  // Render Breakdown Categorie dell'anno con percentuali e barre di avanzamento
+  renderAnnualCategoryBreakdown(categoryTotals, annualExpenses);
+
+  // Aggiorna grafici
+  updateAnnualChartsData(monthIncomeArr, monthExpensesArr, categoryTotals);
+}
+
+function renderAnnualCategoryBreakdown(catTotals, totalExpenses) {
+  const container = document.getElementById('annualCategoryBreakdown');
+  const countBadge = document.getElementById('annualCatRankCount');
+  container.innerHTML = '';
+
+  const catIds = Object.keys(catTotals);
+  countBadge.textContent = `${catIds.length} categorie`;
+
+  if (catIds.length === 0 || totalExpenses === 0) {
+    container.innerHTML = '<div class="empty-state">Nessuna spesa registrata per quest\'anno.</div>';
+    return;
+  }
+
+  // Ordina per spesa decrescente
+  const sortedCategories = catIds.map(catId => {
+    const cat = state.categories.find(c => c.id === catId) || { name: 'Altro', color: '#64748b', icon: 'tag' };
+    const amount = catTotals[catId];
+    const pct = ((amount / totalExpenses) * 100).toFixed(1);
+    const monthlyAvg = amount / 12;
+    return { ...cat, amount, pct, monthlyAvg };
+  }).sort((a, b) => b.amount - a.amount);
+
+  sortedCategories.forEach(item => {
+    const row = document.createElement('div');
+    row.className = 'annual-cat-row';
+    row.innerHTML = `
+      <div class="annual-cat-header">
+        <div class="annual-cat-title">
+          <span class="cat-badge-dot" style="background-color: ${item.color};"></span>
+          <i data-lucide="${item.icon || 'tag'}" style="width: 17px; height: 17px;"></i>
+          <span>${item.name}</span>
+        </div>
+        <div class="annual-cat-stats">
+          <span class="annual-cat-pct">${item.pct}% del totale (${formatCurrency(item.monthlyAvg)}/mese)</span>
+          <strong class="val-expense">-${formatCurrency(item.amount)}</strong>
+        </div>
+      </div>
+      <div class="annual-progress-bar-bg">
+        <div class="annual-progress-bar-fill" style="width: ${item.pct}%; background-color: ${item.color};"></div>
+      </div>
+    `;
+    container.appendChild(row);
+  });
+  lucide.createIcons();
+}
+
+// Inizializzazione Grafici Annuali
+function initAnnualCharts() {
+  const isDark = state.darkMode;
+  const textColor = isDark ? '#94a3b8' : '#64748b';
+  const gridColor = isDark ? '#334155' : '#f1f5f9';
+  const monthLabels = ['Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic'];
+
+  // 1. Flusso di Cassa: Entrate vs Spese
+  const ctxCashflow = document.getElementById('annualCashflowChart').getContext('2d');
+  annualCashflowChartInstance = new Chart(ctxCashflow, {
+    type: 'bar',
+    data: {
+      labels: monthLabels,
+      datasets: [
+        {
+          label: 'Entrate',
+          data: new Array(12).fill(0),
+          backgroundColor: '#10b981',
+          borderRadius: 4
+        },
+        {
+          label: 'Spese',
+          data: new Array(12).fill(0),
+          backgroundColor: '#ef4444',
+          borderRadius: 4
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+        x: { grid: { display: false }, ticks: { color: textColor } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: textColor } }
+      }
+    }
+  });
+
+  // 2. Categorie Totale Anno (Doughnut)
+  const ctxCatAnnual = document.getElementById('annualCategoryChart').getContext('2d');
+  annualCategoryChartInstance = new Chart(ctxCatAnnual, {
+    type: 'doughnut',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        backgroundColor: [],
+        borderWidth: 2,
+        borderColor: isDark ? '#1e293b' : '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: textColor } }
+      },
+      cutout: '70%'
+    }
+  });
+
+  // 3. Risparmio Cumulativo nell'Anno (Area Chart)
+  const ctxCumulative = document.getElementById('annualCumulativeChart').getContext('2d');
+  annualCumulativeChartInstance = new Chart(ctxCumulative, {
+    type: 'line',
+    data: {
+      labels: monthLabels,
+      datasets: [{
+        label: 'Risparmio Cumulativo Netto (€)',
+        data: new Array(12).fill(0),
+        borderColor: '#4f46e5',
+        backgroundColor: 'rgba(79, 70, 229, 0.1)',
+        fill: true,
+        tension: 0.3,
+        pointBackgroundColor: '#4f46e5',
+        pointRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { grid: { color: gridColor }, ticks: { color: textColor } },
+        x: { grid: { display: false }, ticks: { color: textColor } }
+      },
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: textColor } }
+      }
+    }
+  });
+}
+
+function updateAnnualChartsData(monthIncomeArr, monthExpensesArr, catTotals) {
+  if (!annualCashflowChartInstance || !annualCategoryChartInstance || !annualCumulativeChartInstance) return;
+
+  const isDark = state.darkMode;
+
+  // 1. Aggiorna Bar chart Entrate vs Spese
+  annualCashflowChartInstance.data.datasets[0].data = monthIncomeArr;
+  annualCashflowChartInstance.data.datasets[1].data = monthExpensesArr;
+  annualCashflowChartInstance.update();
+
+  // 2. Aggiorna Doughnut categorie annuali
+  const catLabels = [];
+  const catData = [];
+  const catColors = [];
+
+  Object.keys(catTotals).forEach(catId => {
+    const cat = state.categories.find(c => c.id === catId) || { name: 'Altro', color: '#94a3b8' };
+    catLabels.push(cat.name);
+    catData.push(catTotals[catId]);
+    catColors.push(cat.color || '#94a3b8');
+  });
+
+  if (catData.length === 0) {
+    annualCategoryChartInstance.data.labels = ['Nessuna spesa nell\'anno'];
+    annualCategoryChartInstance.data.datasets[0].data = [1];
+    annualCategoryChartInstance.data.datasets[0].backgroundColor = [isDark ? '#334155' : '#e2e8f0'];
+  } else {
+    annualCategoryChartInstance.data.labels = catLabels;
+    annualCategoryChartInstance.data.datasets[0].data = catData;
+    annualCategoryChartInstance.data.datasets[0].backgroundColor = catColors;
+  }
+  annualCategoryChartInstance.data.datasets[0].borderColor = isDark ? '#1e293b' : '#ffffff';
+  annualCategoryChartInstance.update();
+
+  // 3. Calcolo e aggiornamento Line chart Risparmio Cumulativo
+  const cumulativeSavings = new Array(12).fill(0);
+  let runningTotal = 0;
+  for (let i = 0; i < 12; i++) {
+    runningTotal += (monthIncomeArr[i] - monthExpensesArr[i]);
+    cumulativeSavings[i] = runningTotal;
+  }
+  annualCumulativeChartInstance.data.datasets[0].data = cumulativeSavings;
+  annualCumulativeChartInstance.update();
+}
+
+function updateAnnualCharts() {
+  if (annualCashflowChartInstance) annualCashflowChartInstance.resize();
+  if (annualCategoryChartInstance) annualCategoryChartInstance.resize();
+  if (annualCumulativeChartInstance) annualCumulativeChartInstance.resize();
+}
+
+// ==========================================
+// GRAFICI DASHBOARD
+// ==========================================
+function initDashboardCharts() {
   const isDark = state.darkMode;
   const textColor = isDark ? '#94a3b8' : '#64748b';
   const gridColor = isDark ? '#334155' : '#f1f5f9';
@@ -786,7 +1125,7 @@ function initCharts() {
   });
 }
 
-function updateCharts() {
+function updateDashboardCharts() {
   if (!categoryChartInstance || !yearlyChartInstance) return;
 
   const isDark = state.darkMode;
