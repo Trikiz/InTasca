@@ -1529,15 +1529,131 @@ function updateDashboardCharts() {
 }
 
 // ==========================================
-// FILE SYSTEM ACCESS & SYNC
+// FILE SYSTEM ACCESS & SYNC (PERSISTENZA CON INDEXEDDB)
 // ==========================================
+
+let pendingHandle = null;
+
+// Gestione database locale IndexedDB per salvare l'handle del file fisico
+function openHandleDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('intasca_db', 1);
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('handles')) {
+        db.createObjectStore('handles');
+      }
+    };
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error);
+  });
+}
+
+async function saveFileHandleToDB(handle) {
+  try {
+    const db = await openHandleDB();
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').put(handle, 'connected_file');
+    return new Promise((resolve) => {
+      tx.oncomplete = () => resolve(true);
+      tx.onerror = () => resolve(false);
+    });
+  } catch (err) {
+    console.warn('Impossibile salvare il fileHandle in IndexedDB:', err);
+  }
+}
+
+async function getFileHandleFromDB() {
+  try {
+    const db = await openHandleDB();
+    const tx = db.transaction('handles', 'readonly');
+    const req = tx.objectStore('handles').get('connected_file');
+    return new Promise((resolve) => {
+      req.onsuccess = () => resolve(req.result || null);
+      req.onerror = () => resolve(null);
+    });
+  } catch (err) {
+    return null;
+  }
+}
+
+async function removeFileHandleFromDB() {
+  try {
+    const db = await openHandleDB();
+    const tx = db.transaction('handles', 'readwrite');
+    tx.objectStore('handles').delete('connected_file');
+  } catch (err) {
+    console.warn('Impossibile rimuovere il fileHandle da IndexedDB:', err);
+  }
+}
+
+// Lettura e caricamento dati dal file agganciato
+async function loadDataFromFileHandle(handle) {
+  fileHandle = handle;
+  pendingHandle = null;
+
+  const file = await fileHandle.getFile();
+  const content = await file.text();
+
+  if (content.trim()) {
+    const parsed = JSON.parse(content);
+    if (parsed.transactions && Array.isArray(parsed.transactions)) {
+      state.transactions = parsed.transactions;
+      if (parsed.categories) state.categories = parsed.categories;
+      if (parsed.subscriptions) state.subscriptions = parsed.subscriptions;
+      populateCategorySelects();
+    }
+  }
+
+  setConnectedFileUI(fileHandle.name);
+  checkAndApplySubscriptions();
+  refreshApp();
+}
+
+// Tentativo di ricollegamento automatico all'avvio
+async function tryAutoConnectFile() {
+  if (!('showOpenFilePicker' in window)) return;
+
+  const savedHandle = await getFileHandleFromDB();
+  if (!savedHandle) return;
+
+  try {
+    // Verifica se il browser ha già i permessi attivi
+    const status = await savedHandle.queryPermission({ mode: 'readwrite' });
+    if (status === 'granted') {
+      await loadDataFromFileHandle(savedHandle);
+    } else {
+      // Handle memorizzato ma richiede 1 clic dell'utente per sbloccare l'accesso al disco
+      pendingHandle = savedHandle;
+      document.getElementById('linkFileText').textContent = `Ricollega ${savedHandle.name}`;
+      document.getElementById('linkFileBtn').title = `Clicca per confermare l'accesso a ${savedHandle.name}`;
+    }
+  } catch (err) {
+    console.warn('Verifica permessi file memorizzato fallita:', err);
+    await removeFileHandleFromDB();
+  }
+}
+
 function setupFileSystemSync() {
   const linkFileBtn = document.getElementById('linkFileBtn');
   const unlinkFileBtn = document.getElementById('unlinkFileBtn');
 
+  // Esegui la verifica automatica all'avvio
+  tryAutoConnectFile();
+
   linkFileBtn.addEventListener('click', async () => {
     if ('showOpenFilePicker' in window) {
       try {
+        // Se c'è già il file memorizzato in attesa di sblocco, chiedi solo il permesso con 1 clic senza riaprire la cartella
+        if (pendingHandle) {
+          const status = await pendingHandle.requestPermission({ mode: 'readwrite' });
+          if (status === 'granted') {
+            await loadDataFromFileHandle(pendingHandle);
+            return;
+          }
+        }
+
+        // Altrimenti apri il selettore per scegliere un nuovo file
         const [handle] = await window.showOpenFilePicker({
           types: [{
             description: 'File InTasca JSON',
@@ -1546,22 +1662,8 @@ function setupFileSystemSync() {
           multiple: false
         });
 
-        fileHandle = handle;
-        const file = await fileHandle.getFile();
-        const content = await file.text();
-
-        if (content.trim()) {
-          const parsed = JSON.parse(content);
-          if (parsed.transactions && Array.isArray(parsed.transactions)) {
-            state.transactions = parsed.transactions;
-            if (parsed.categories) state.categories = parsed.categories;
-            if (parsed.subscriptions) state.subscriptions = parsed.subscriptions;
-            populateCategorySelects();
-          }
-        }
-        setConnectedFileUI(fileHandle.name);
-        checkAndApplySubscriptions();
-        refreshApp();
+        await saveFileHandleToDB(handle);
+        await loadDataFromFileHandle(handle);
       } catch (err) {
         if (err.name !== 'AbortError') {
           console.error(err);
@@ -1573,10 +1675,13 @@ function setupFileSystemSync() {
     }
   });
 
-  unlinkFileBtn.addEventListener('click', () => {
+  unlinkFileBtn.addEventListener('click', async () => {
     fileHandle = null;
+    pendingHandle = null;
+    await removeFileHandleFromDB();
     document.getElementById('fileNoticeBar').style.display = 'none';
     document.getElementById('linkFileText').textContent = 'Collega File';
+    document.getElementById('linkFileBtn').title = 'Collega un file sul tuo computer';
     lucide.createIcons();
   });
 }
@@ -1585,6 +1690,7 @@ function setConnectedFileUI(fileName) {
   document.getElementById('fileNoticeBar').style.display = 'flex';
   document.getElementById('connectedFileName').textContent = fileName;
   document.getElementById('linkFileText').textContent = 'File Collegato';
+  document.getElementById('linkFileBtn').title = `File sincronizzato: ${fileName}`;
   lucide.createIcons();
 }
 
