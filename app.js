@@ -35,7 +35,7 @@ let state = {
   darkMode: false
 };
 
-const APP_VERSION = '0.0.9';
+const APP_VERSION = '0.0.10';
 
 // Stato interno per l'importatore CSV
 let rawCsvRows = [];
@@ -937,8 +937,10 @@ document.getElementById('editTxForm').addEventListener('submit', (e) => {
 });
 
 // ==========================================
-// GESTIONE CATEGORIE
+// GESTIONE CATEGORIE (MODULO COMPLETO CRUD)
 // ==========================================
+
+// 1. READ: Rendering a video della lista categorie con pulsanti Modifica ed Elimina
 function renderCategoriesList() {
   const container = document.getElementById('catListContainer');
   const countEl = document.getElementById('catCount');
@@ -974,7 +976,7 @@ function renderCategoriesList() {
       </div>
     `;
 
-    // Listener diretti
+    // Listener nativi: niente più codice esposto a window
     item.querySelector('.btn-edit-cat').addEventListener('click', () => openEditCatModal(cat.id));
 
     const delBtn = item.querySelector('.btn-del-cat');
@@ -987,8 +989,8 @@ function renderCategoriesList() {
   lucide.createIcons();
 }
 
-// Logica Finestra Modale Modifica Categoria
-window.openEditCatModal = function(catId) {
+// 2. UI MODALE: Apertura e pre-compilazione dati per la modifica
+function openEditCatModal(catId) {
   const modal = document.getElementById('editCatModal');
   if (!modal) return;
   const cat = state.categories.find(c => c.id === catId);
@@ -1001,14 +1003,37 @@ window.openEditCatModal = function(catId) {
 
   modal.classList.add('open');
   lucide.createIcons();
-};
+}
 
-window.closeEditCatModal = function() {
+// Chiusura modale (mantenuta accessibile anche per gli onclick nell'HTML)
+function closeEditCatModal() {
   const modal = document.getElementById('editCatModal');
   if (modal) modal.classList.remove('open');
-};
+}
+window.closeEditCatModal = closeEditCatModal;
 
+// 3. DELETE: Eliminazione sicura con riassegnazione automatica ad "Altro"
+function deleteCategory(catId) {
+  const txUsingCat = state.transactions.filter(t => t.category === catId).length;
+  if (txUsingCat > 0) {
+    if (!confirm(`Questa categoria è usata in ${txUsingCat} movimenti. Se la elimini, quei movimenti verranno assegnati ad "Altro". Vuoi continuare?`)) {
+      return;
+    }
+    state.transactions.forEach(t => {
+      if (t.category === catId) t.category = 'altro';
+    });
+  } else {
+    if (!confirm('Vuoi eliminare questa categoria?')) return;
+  }
+
+  state.categories = state.categories.filter(c => c.id !== catId);
+  populateCategorySelects();
+  refreshApp();
+}
+
+// 4. CREATE & UPDATE: Setup listener per i form di creazione e modifica categoria
 function setupCategoryModals() {
+  // Submit Form Modifica Categoria
   const editCatForm = document.getElementById('editCatForm');
   if (editCatForm) {
     editCatForm.addEventListener('submit', (e) => {
@@ -1030,6 +1055,7 @@ function setupCategoryModals() {
     });
   }
 
+  // Submit Form Nuova Categoria
   const newCatForm = document.getElementById('newCatForm');
   if (newCatForm) {
     newCatForm.addEventListener('submit', (e) => {
@@ -1054,84 +1080,6 @@ function setupCategoryModals() {
     });
   }
 }
-
-// Logica Finestra Modale Modifica Categoria
-const editCatModal = document.getElementById('editCatModal');
-
-window.openEditCatModal = function(catId) {
-  const cat = state.categories.find(c => c.id === catId);
-  if (!cat) return;
-
-  document.getElementById('editCatId').value = cat.id;
-  document.getElementById('editCatName').value = cat.name;
-  document.getElementById('editCatColor').value = cat.color || '#6366f1';
-  document.getElementById('editCatIcon').value = cat.icon || 'tag';
-
-  editCatModal.classList.add('open');
-  lucide.createIcons();
-};
-
-window.closeEditCatModal = function() {
-  if (editCatModal) editCatModal.classList.remove('open');
-};
-
-document.getElementById('editCatForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const id = document.getElementById('editCatId').value;
-  const cat = state.categories.find(c => c.id === id);
-  if (!cat) return;
-
-  const newName = document.getElementById('editCatName').value.trim();
-  if (!newName) return;
-
-  // Aggiorna le proprietà mantenendo lo stesso ID
-  cat.name = newName;
-  cat.color = document.getElementById('editCatColor').value;
-  cat.icon = document.getElementById('editCatIcon').value;
-
-  closeEditCatModal();
-  populateCategorySelects();
-  refreshApp();
-});
-
-document.getElementById('newCatForm').addEventListener('submit', (e) => {
-  e.preventDefault();
-  const name = document.getElementById('catName').value.trim();
-  const color = document.getElementById('catColor').value;
-  const icon = document.getElementById('catIcon').value;
-
-  if (!name) return;
-
-  const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || Date.now().toString();
-
-  if (state.categories.some(c => c.id === id)) {
-    alert('Esiste già una categoria con questo nome!');
-    return;
-  }
-
-  state.categories.push({ id, name, color, icon });
-  document.getElementById('catName').value = '';
-  populateCategorySelects();
-  refreshApp();
-});
-
-window.deleteCategory = function(catId) {
-  const txUsingCat = state.transactions.filter(t => t.category === catId).length;
-  if (txUsingCat > 0) {
-    if (!confirm(`Questa categoria è usata in ${txUsingCat} movimenti. Se la elimini, quei movimenti verranno assegnati ad "Altro". Vuoi continuare?`)) {
-      return;
-    }
-    state.transactions.forEach(t => {
-      if (t.category === catId) t.category = 'altro';
-    });
-  } else {
-    if (!confirm('Vuoi eliminare questa categoria?')) return;
-  }
-
-  state.categories = state.categories.filter(c => c.id !== catId);
-  populateCategorySelects();
-  refreshApp();
-};
 
 // ==========================================
 // GESTIONE ABBONAMENTI & SPESE RICORRENTI
@@ -1878,11 +1826,12 @@ document.getElementById('fileInput').addEventListener('change', (event) => {
 });
 
 // ==========================================
-// IMPORTAZIONE ESTRATTI CONTO CSV (PAPA PARSE)
+// IMPORTAZIONE ESTRATTI CONTO (CSV & EXCEL XLSX)
 // ==========================================
 
 const csvModal = document.getElementById('csvModal');
 const csvFileInput = document.getElementById('csvFileInput');
+const csvDropBox = document.getElementById('csvDropBox');
 
 // Apertura / Chiusura Modale
 document.getElementById('openCsvModalBtn').addEventListener('click', () => {
@@ -1912,35 +1861,130 @@ function goToCsvStep(stepNumber) {
   lucide.createIcons();
 }
 
-// Gestione selezione del file CSV tramite PapaParse
-if (csvFileInput) {
-  csvFileInput.addEventListener('change', (e) => {
-    const file = e.target.files[0];
-    if (!file) return;
-
-    Papa.parse(file, {
-      header: true,
-      skipEmptyLines: 'greedy',
-      complete: function(results) {
-        if (!results.data || results.data.length === 0) {
-          alert('Il file CSV selezionato sembra vuoto o non leggibile.');
-          return;
-        }
-
-        rawCsvRows = results.data;
-        csvHeaders = results.meta.fields || Object.keys(results.data[0]);
-
-        populateCsvColumnSelectors();
-        goToCsvStep(2);
-      },
-      error: function(err) {
-        alert('Errore durante la lettura del file CSV: ' + err.message);
-      }
+// Supporto Drag & Drop sul riquadro
+if (csvDropBox) {
+  ['dragenter', 'dragover'].forEach(eventName => {
+    csvDropBox.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      csvDropBox.style.borderColor = 'var(--primary)';
+      csvDropBox.style.background = 'var(--badge-bg)';
     });
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    csvDropBox.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      csvDropBox.style.borderColor = 'var(--border)';
+      csvDropBox.style.background = 'var(--input-bg)';
+    });
+  });
+
+  csvDropBox.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const file = dt.files[0];
+    if (file) handleImportFile(file);
   });
 }
 
-// Popola le tendine di mappatura colonne con i nomi trovati nel file
+if (csvFileInput) {
+  csvFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (file) handleImportFile(file);
+  });
+}
+
+// Funzione unificata di caricamento: gestisce sia CSV che Excel
+function handleImportFile(file) {
+  const fileName = file.name.toLowerCase();
+
+  if (fileName.endsWith('.xlsx') || fileName.endsWith('.xls')) {
+    // Caricamento con SheetJS
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const data = new Uint8Array(e.target.result);
+        const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        
+        // Converte in matrice 2D di celle
+        const rows = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: null });
+        processRawTableMatrix(rows);
+      } catch (err) {
+        alert('Errore nella lettura del file Excel: ' + err.message);
+      }
+    };
+    reader.readAsArrayBuffer(file);
+  } else {
+    // Caricamento con PapaParse (CSV)
+    Papa.parse(file, {
+      header: false,
+      skipEmptyLines: 'greedy',
+      complete: function(results) {
+        if (!results.data || results.data.length === 0) {
+          alert('Il file CSV sembra vuoto.');
+          return;
+        }
+        processRawTableMatrix(results.data);
+      },
+      error: function(err) {
+        alert('Errore nella lettura del file CSV: ' + err.message);
+      }
+    });
+  }
+}
+
+// Algoritmo intelligente: scansiona le prime 30 righe e individua dove inizia davvero la tabella
+// (salta in automatico le 11 righe di intestazione e saldo delle Poste o di altre banche)
+function processRawTableMatrix(rows) {
+  let headerIdx = -1;
+  const keywords = ['data', 'date', 'descrizione', 'causale', 'addebiti', 'accrediti', 'importo', 'amount', 'uscite', 'entrate', 'dare', 'avere'];
+
+  for (let i = 0; i < Math.min(rows.length, 30); i++) {
+    const row = rows[i];
+    if (!Array.isArray(row)) continue;
+    let matchCount = 0;
+    for (let cell of row) {
+      if (cell !== null && cell !== undefined) {
+        const str = String(cell).toLowerCase().trim();
+        if (keywords.some(k => str.includes(k))) {
+          matchCount++;
+        }
+      }
+    }
+    // Se la riga contiene almeno 2 parole chiave contabili, è l'intestazione ufficiale
+    if (matchCount >= 2) {
+      headerIdx = i;
+      break;
+    }
+  }
+
+  if (headerIdx === -1) headerIdx = 0;
+
+  const headerRow = rows[headerIdx] || [];
+  csvHeaders = headerRow.map((col, idx) => {
+    const name = (col !== null && col !== undefined) ? String(col).trim() : '';
+    return name || `Colonna_${idx + 1}`;
+  });
+
+  rawCsvRows = [];
+  for (let i = headerIdx + 1; i < rows.length; i++) {
+    const row = rows[i];
+    if (!Array.isArray(row) || !row.some(c => c !== null && c !== undefined && String(c).trim() !== '')) {
+      continue;
+    }
+    const rowObj = {};
+    csvHeaders.forEach((h, colIdx) => {
+      rowObj[h] = (row[colIdx] !== undefined) ? row[colIdx] : null;
+    });
+    rawCsvRows.push(rowObj);
+  }
+
+  populateCsvColumnSelectors();
+  goToCsvStep(2);
+}
+
+// Popola le tendine di mappatura e seleziona in automatico i campi giusti
 function populateCsvColumnSelectors() {
   const dateSel = document.getElementById('csvColDate');
   const noteSel = document.getElementById('csvColNote');
@@ -1960,12 +2004,27 @@ function populateCsvColumnSelectors() {
     });
   });
 
-  // Rilevamento automatico intelligente dei campi più comuni usati dalle banche
-  autoSelectBestMatch(dateSel, ['data', 'date', 'contabile', 'operazione', 'valuta']);
+  // Riconoscimento intelligente delle colonne bancarie italiane ed estere
+  autoSelectBestMatch(dateSel, ['data contabile', 'data operazione', 'data valuta', 'data', 'date']);
   autoSelectBestMatch(noteSel, ['descrizione', 'causale', 'nota', 'beneficiario', 'dettaglio', 'description']);
   autoSelectBestMatch(amountSel, ['importo', 'amount', 'totale', 'saldo']);
-  autoSelectBestMatch(expSel, ['uscite', 'addebiti', 'dare', 'debit', 'expense']);
-  autoSelectBestMatch(incSel, ['entrate', 'accrediti', 'avere', 'credit', 'income']);
+  autoSelectBestMatch(expSel, ['addebiti', 'uscite', 'dare', 'debit', 'expense']);
+  autoSelectBestMatch(incSel, ['accrediti', 'entrate', 'avere', 'credit', 'income']);
+
+  // Auto-switch intelligente: se ci sono colonne "Addebiti" e "Accrediti" (es. Poste Italiane),
+  // passa direttamente alla modalità "Due colonne separate"
+  const headersLower = csvHeaders.map(h => h.toLowerCase());
+  const hasExpCol = headersLower.some(h => ['addebiti', 'uscite', 'dare'].some(k => h.includes(k)));
+  const hasIncCol = headersLower.some(h => ['accrediti', 'entrate', 'avere'].some(k => h.includes(k)));
+  const hasSingleAmountCol = headersLower.some(h => ['importo', 'amount'].some(k => h.includes(k)));
+
+  const amountModeSel = document.getElementById('csvAmountMode');
+  if (hasExpCol && hasIncCol && !hasSingleAmountCol) {
+    amountModeSel.value = 'double';
+  } else {
+    amountModeSel.value = 'single';
+  }
+  amountModeSel.dispatchEvent(new Event('change'));
 
   // Popola la categoria di default
   catSel.innerHTML = '';
@@ -1995,28 +2054,41 @@ document.getElementById('csvAmountMode').addEventListener('change', (e) => {
   document.getElementById('csvDoubleAmountGroup').style.display = isDouble ? 'grid' : 'none';
 });
 
-// Conversione e pulizia data da formati bancari a standard YYYY-MM-DD
-function parseCsvDate(dateStr, format) {
-  if (!dateStr) return '';
-  const clean = String(dateStr).trim();
+// Conversione versatile della data (supporta oggetti Date di Excel, ISO e formati italiani)
+function parseCsvDate(dateVal, format) {
+  if (!dateVal) return '';
+
+  // Se è un oggetto Date nativo restituito da SheetJS
+  if (dateVal instanceof Date && !isNaN(dateVal.getTime())) {
+    return toISODate(dateVal);
+  }
+
+  const clean = String(dateVal).trim();
+  if (!clean) return '';
+
+  // Se è già in formato ISO YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}/.test(clean)) {
+    return clean.substring(0, 10);
+  }
+
   const sep = clean.includes('/') ? '/' : (clean.includes('-') ? '-' : '.');
   const parts = clean.split(sep);
-
   if (parts.length < 3) return '';
 
   let y, m, d;
-  if (format === 'DD/MM/YYYY' || format === 'DD-MM-YYYY') {
-    d = parts[0].padStart(2, '0');
-    m = parts[1].padStart(2, '0');
-    y = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+  if (format === 'DD/MM/YYYY' || format === 'DD-MM-YYYY' || parts[0].length <= 2) {
+    d = parts[0].trim().padStart(2, '0');
+    m = parts[1].trim().padStart(2, '0');
+    let yearPart = parts[2].trim().split(' ')[0];
+    y = yearPart.length === 2 ? '20' + yearPart : yearPart;
   } else {
-    // YYYY-MM-DD
-    y = parts[0];
-    m = parts[1].padStart(2, '0');
-    d = parts[2].padStart(2, '0');
+    y = parts[0].trim();
+    m = parts[1].trim().padStart(2, '0');
+    d = parts[2].trim().split(' ')[0].padStart(2, '0');
   }
 
-  // Verifica validità data
+  if (y.length !== 4) return '';
+
   const test = new Date(`${y}-${m}-${d}T00:00:00`);
   return isNaN(test.getTime()) ? '' : `${y}-${m}-${d}`;
 }
@@ -2033,7 +2105,7 @@ function generateCsvPreview() {
 
   rawCsvRows.forEach((row, index) => {
     const isoDate = parseCsvDate(row[dateCol], dateFormat);
-    if (!isoDate) return; // Salta righe senza data valida
+    if (!isoDate) return;
 
     const rawNote = row[noteCol] || 'Movimento importato';
     let type = 'expense';
@@ -2041,8 +2113,9 @@ function generateCsvPreview() {
 
     if (amountMode === 'single') {
       const col = document.getElementById('csvColAmount').value;
-      const rawVal = String(row[col] || '0').trim();
-      const isNegative = rawVal.includes('-') || (rawVal.startsWith('(') && rawVal.endsWith(')'));
+      const rawVal = row[col];
+      const strVal = String(rawVal || '0').trim();
+      const isNegative = strVal.includes('-') || (strVal.startsWith('(') && strVal.endsWith(')'));
       
       amount = parseAmount(rawVal);
       type = isNegative ? 'expense' : 'income';
@@ -2062,22 +2135,22 @@ function generateCsvPreview() {
       }
     }
 
-    if (amount <= 0) return; // Salta importi nulli
+    if (amount <= 0) return;
 
-    // Controllo duplicati: stessa data e stesso importo esatto
+    // Controllo duplicati esatto: stessa data e stesso importo
     const isDuplicate = state.transactions.some(tx => {
       return tx.date === isoDate && Math.abs(tx.amount - amount) < 0.001;
     });
 
     preparedCsvTransactions.push({
       tempId: 'csv_' + index,
-      selected: !isDuplicate, // Deselezionato in automatico se è un probabile duplicato
+      selected: !isDuplicate,
       isDuplicate,
       date: isoDate,
       type,
       amount,
       category: defaultCategory,
-      note: rawNote.trim()
+      note: String(rawNote).trim()
     });
   });
 
@@ -2124,12 +2197,10 @@ function renderCsvPreviewTable() {
       </td>
     `;
 
-    // Listener spunta riga
     tr.querySelector('.csv-row-check').addEventListener('change', (e) => {
       item.selected = e.target.checked;
     });
 
-    // Listener cambio categoria singola riga
     tr.querySelector('.csv-row-cat').addEventListener('change', (e) => {
       item.category = e.target.value;
     });

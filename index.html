@@ -68,10 +68,10 @@
           <span id="linkFileText">Collega File</span>
         </button>
 
-        <!-- Importazione Estratto Conto CSV -->
-        <input type="file" id="csvFileInput" accept=".csv, .txt" style="display: none;">
-        <button id="openCsvModalBtn" type="button" title="Importa estratto conto CSV">
-          <i data-lucide="file-spreadsheet"></i> <span class="btn-text">Importa CSV</span>
+        <!-- Importazione Estratto Conto CSV / Excel -->
+        <input type="file" id="csvFileInput" accept=".csv, .txt, .xlsx, .xls" style="display: none;">
+        <button id="openCsvModalBtn" type="button" title="Importa estratto conto CSV o Excel">
+          <i data-lucide="file-spreadsheet"></i> <span class="btn-text">Importa CSV / Excel</span>
         </button>
 
         <!-- Carica Manuale -->
@@ -647,13 +647,13 @@
     <!-- ========================================== -->
     <footer class="app-footer">
       <span>InTasca</span>
-      <span class="version-badge" id="appVersion">v0.0.8</span>
+      <span class="version-badge" id="appVersion">v0.0.10</span>
       <span class="footer-dot">•</span>
       <span>Local-first</span>
     </footer>
 
   </div> <!-- Chiusura di .container -->
-  </div>
+
 
   <!-- ========================================== -->
   <!-- MODALE MODIFICA TRANSAZIONE                -->
@@ -786,7 +786,7 @@
       <div class="modal-header">
         <div style="display: flex; align-items: center; gap: 8px;">
           <i data-lucide="file-spreadsheet" class="icon-primary"></i>
-          <h3>Importa Estratto Conto CSV</h3>
+          <h3>Importa Estratto Conto (CSV / Excel)</h3>
         </div>
         <button type="button" class="btn-close" onclick="closeCsvModal()">
           <i data-lucide="x"></i>
@@ -804,10 +804,10 @@
       <div id="csvStep1" class="csv-step-content">
         <div class="csv-drop-box" id="csvDropBox">
           <i data-lucide="upload-cloud" style="width: 48px; height: 48px; color: var(--primary);"></i>
-          <h4>Trascina qui il file CSV dell'estratto conto</h4>
-          <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 6px 0 14px;">Oppure selezionalo dal tuo computer (qualsiasi banca italiana o estera)</p>
+          <h4>Trascina qui il file CSV o Excel (.xlsx) dell'estratto conto</h4>
+          <p style="font-size: 0.8125rem; color: var(--text-muted); margin: 6px 0 14px;">Oppure selezionalo dal tuo computer (Poste Italiane, Intesa, Revolut, BBVA, ecc.)</p>
           <button type="button" class="btn-primary" onclick="document.getElementById('csvFileInput').click()">
-            <i data-lucide="folder-open"></i> Scegli File CSV
+            <i data-lucide="folder-open"></i> Scegli File CSV / Excel
           </button>
         </div>
       </div>
@@ -911,16 +911,12 @@
     </div>
   </div>
 
-  <!-- PapaParse CDN per il parsing robusto dei file CSV bancari -->
+<!-- PapaParse CDN per i file CSV -->
   <script src="https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js"></script>
+  <!-- SheetJS CDN per i file Excel (.xlsx / .xls) -->
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 
   <!-- Logica JavaScript caricata solo DOPO che tutto il DOM è stato creato -->
   <script src="app.js"></script>
-</body>
-</html>
-
-  <!-- Logica JavaScript -->
-  <script src="app.js"></script>
-
 </body>
 </html>
