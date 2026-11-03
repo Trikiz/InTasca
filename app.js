@@ -53,6 +53,11 @@ let annualCashflowChartInstance = null;
 let annualCategoryChartInstance = null;
 let annualCumulativeChartInstance = null;
 
+// Data pivot e riferimenti grafici Report Settimanale
+let weeklySelectedDate = new Date();
+let weeklyDayChartInstance = null;
+let weeklyCategoryChartInstance = null;
+
 // ==========================================
 // INIZIALIZZAZIONE
 // ==========================================
@@ -83,8 +88,10 @@ window.addEventListener('DOMContentLoaded', () => {
   setupFileSystemSync();
   setupSubscriptionForm();
   populateCategorySelects();
+  setupWeeklyPeriodSelector();
   initDashboardCharts();
   initAnnualCharts();
+  initWeeklyCharts();
   refreshApp();
 });
 
@@ -261,6 +268,9 @@ function switchView(viewName) {
   } else if (viewName === 'annual') {
     renderAnnualReport();
     setTimeout(updateAnnualCharts, 50);
+  } else if (viewName === 'weekly') {
+    renderWeeklyReport();
+    setTimeout(updateWeeklyCharts, 50);
   } else if (viewName === 'categories') {
     renderCategoriesList();
   } else if (viewName === 'subscriptions') {
@@ -328,13 +338,70 @@ function updateChartsTheme() {
     annualCumulativeChartInstance.options.plugins.legend.labels.color = textColor;
     annualCumulativeChartInstance.update();
   }
+  if (weeklyDayChartInstance) {
+    weeklyDayChartInstance.options.scales.x.ticks.color = textColor;
+    weeklyDayChartInstance.options.scales.y.ticks.color = textColor;
+    weeklyDayChartInstance.options.scales.y.grid.color = gridColor;
+    weeklyDayChartInstance.update();
+  }
+  if (weeklyCategoryChartInstance) {
+    weeklyCategoryChartInstance.options.plugins.legend.labels.color = textColor;
+    weeklyCategoryChartInstance.update();
+  }
 }
 
 // ==========================================
 // UTILITY
 // ==========================================
+
+// ==========================================
+// UTILITY: SANITIZZAZIONE E FORMATTAZIONE ROBUSTA
+// ==========================================
+
+// Sanitizzazione testo contro iniezioni HTML/XSS
+function escapeHtml(str) {
+  if (str === null || str === undefined) return '';
+  return String(str)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+// Parsing numerico universale: gestisce numeri, stringhe con virgola o punto (es. "1.250,50", "25,50", 12.3)
+function parseAmount(val) {
+  if (typeof val === 'number') return isNaN(val) ? 0 : Math.abs(val);
+  if (!val) return 0;
+
+  let clean = String(val).trim().replace(/\s+/g, '');
+  
+  // Se contiene sia punto che virgola (es. "1.250,50"), rimuove i punti delle migliaia
+  if (clean.includes('.') && clean.includes(',')) {
+    clean = clean.replace(/\./g, '').replace(',', '.');
+  } else if (clean.includes(',')) {
+    // Sostituisce la virgola decimale italiana col punto
+    clean = clean.replace(',', '.');
+  }
+
+  const parsed = parseFloat(clean);
+  return isNaN(parsed) ? 0 : Math.abs(parsed);
+}
+
+// Formattazione valuta sicura
 function formatCurrency(num) {
-  return num.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+  const n = (typeof num === 'number' && !isNaN(num)) ? num : parseAmount(num);
+  return n.toLocaleString('it-IT', { style: 'currency', currency: 'EUR' });
+}
+
+// Formattazione visiva data (da YYYY-MM-DD a DD/MM/YYYY)
+function formatDate(dateStr) {
+  if (!dateStr) return '';
+  const parts = dateStr.split('-');
+  if (parts.length === 3) {
+    return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  }
+  return escapeHtml(dateStr);
 }
 
 async function saveToStorage() {
@@ -372,10 +439,253 @@ function refreshApp() {
   renderDashboardTransactions();
   renderAllTransactions();
   renderAnnualReport();
+  renderWeeklyReport();
   renderCategoriesList();
   renderSubscriptionsList();
   updateDashboardCharts();
   lucide.createIcons();
+}
+
+// Calcola lunedì (inizio) e domenica (fine) della settimana contenente la data passata
+function getWeekRange(refDate) {
+  const d = new Date(refDate);
+  const day = d.getDay(); // 0 = Dom, 1 = Lun, ...
+  const diffToMonday = (day === 0 ? -6 : 1) - day;
+  
+  const monday = new Date(d);
+  monday.setDate(d.getDate() + diffToMonday);
+  monday.setHours(0, 0, 0, 0);
+
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  sunday.setHours(23, 59, 59, 999);
+
+  return { monday, sunday };
+}
+
+// Numero settimana dell'anno (ISO 8601)
+function getISOWeekNumber(d) {
+  const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
+  const dayNum = date.getUTCDay() || 7;
+  date.setUTCDate(date.getUTCDate() + 4 - dayNum);
+  const yearStart = new Date(Date.UTC(date.getUTCFullYear(), 0, 1));
+  return Math.ceil((((date - yearStart) / 86400000) + 1) / 7);
+}
+
+// Formato data YYYY-MM-DD
+function toISODate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function setupWeeklyPeriodSelector() {
+  document.getElementById('prevWeekBtn').addEventListener('click', () => {
+    weeklySelectedDate.setDate(weeklySelectedDate.getDate() - 7);
+    renderWeeklyReport();
+  });
+
+  document.getElementById('nextWeekBtn').addEventListener('click', () => {
+    weeklySelectedDate.setDate(weeklySelectedDate.getDate() + 7);
+    renderWeeklyReport();
+  });
+
+  document.getElementById('currentWeekBtn').addEventListener('click', () => {
+    weeklySelectedDate = new Date();
+    renderWeeklyReport();
+  });
+}
+
+function renderWeeklyReport() {
+  const { monday, sunday } = getWeekRange(weeklySelectedDate);
+  const monISO = toISODate(monday);
+  const sunISO = toISODate(sunday);
+  const weekNum = getISOWeekNumber(monday);
+
+  // Aggiorna intestazione periodo
+  const labelEl = document.getElementById('weeklyLabel');
+  const hintEl = document.getElementById('weeklyHint');
+  const monStr = `${String(monday.getDate()).padStart(2, '0')}/${String(monday.getMonth() + 1).padStart(2, '0')}`;
+  const sunStr = `${String(sunday.getDate()).padStart(2, '0')}/${String(sunday.getMonth() + 1).padStart(2, '0')}/${sunday.getFullYear()}`;
+  
+  labelEl.textContent = `Settimana ${weekNum} (${monStr} - ${sunStr})`;
+
+  const now = new Date();
+  const isCurrentWeek = (now >= monday && now <= sunday);
+  hintEl.textContent = isCurrentWeek 
+    ? 'Stai visualizzando i dati della settimana corrente'
+    : `Archivio della settimana dal ${monStr} al ${sunStr}`;
+
+  // Inizializza contatori
+  let weeklyExpenses = 0;
+  let weeklyIncome = 0;
+  const dayExpensesArr = new Array(7).fill(0); // 0 = Lun, 1 = Mar, ... 6 = Dom
+  const dayNames = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Venerdì', 'Sabato', 'Domenica'];
+  const catTotals = {};
+
+  // Filtra movimenti della settimana
+  const weekTxs = state.transactions.filter(tx => {
+    return tx.date >= monISO && tx.date <= sunISO;
+  }).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  weekTxs.forEach(tx => {
+    const amt = parseAmount(tx.amount);
+    if (tx.type === 'income') {
+      weeklyIncome += amt;
+    } else {
+      weeklyExpenses += amt;
+      catTotals[tx.category] = (catTotals[tx.category] || 0) + amt;
+
+      // Assegna la spesa al corretto giorno della settimana (0 = Lunedi)
+      const d = new Date(tx.date + 'T00:00:00');
+      const dayIdx = (d.getDay() === 0 ? 6 : d.getDay() - 1);
+      dayExpensesArr[dayIdx] += amt;
+    }
+  });
+
+  const netSavings = weeklyIncome - weeklyExpenses;
+  const avgDaily = weeklyExpenses / 7;
+
+  // Trova giorno di picco
+  let peakDayIdx = -1;
+  let peakDayAmt = 0;
+  dayExpensesArr.forEach((amt, idx) => {
+    if (amt > peakDayAmt) {
+      peakDayAmt = amt;
+      peakDayIdx = idx;
+    }
+  });
+
+  // Aggiorna KPI
+  document.getElementById('weeklyExpenses').textContent = formatCurrency(weeklyExpenses);
+  document.getElementById('weeklyIncome').textContent = formatCurrency(weeklyIncome);
+  
+  const netEl = document.getElementById('weeklyNetSavings');
+  netEl.textContent = (netSavings >= 0 ? '+' : '') + formatCurrency(netSavings);
+  netEl.className = 'stat-val ' + (netSavings >= 0 ? 'val-income' : 'val-expense');
+
+  document.getElementById('weeklyAvgDaily').textContent = formatCurrency(avgDaily);
+  
+  const topDayEl = document.getElementById('weeklyTopDay');
+  if (peakDayIdx >= 0 && peakDayAmt > 0) {
+    topDayEl.textContent = `Picco: ${dayNames[peakDayIdx]} (${formatCurrency(peakDayAmt)})`;
+  } else {
+    topDayEl.textContent = 'Nessuna spesa';
+  }
+
+  // Render lista transazioni settimana
+  const listEl = document.getElementById('weeklyTxList');
+  const countEl = document.getElementById('weeklyTxCount');
+  listEl.innerHTML = '';
+  countEl.textContent = `${weekTxs.length} moviment${weekTxs.length === 1 ? 'o' : 'i'}`;
+
+  if (weekTxs.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">Nessun movimento registrato in questa settimana.</div>';
+  } else {
+    weekTxs.forEach(tx => {
+      listEl.appendChild(createTxElement(tx, true));
+    });
+  }
+
+  // Aggiorna grafici
+  updateWeeklyChartsData(dayExpensesArr, catTotals);
+  lucide.createIcons();
+}
+
+function initWeeklyCharts() {
+  const isDark = state.darkMode;
+  const textColor = isDark ? '#94a3b8' : '#64748b';
+  const gridColor = isDark ? '#334155' : '#f1f5f9';
+  const dayLabels = ['Lun', 'Mar', 'Mer', 'Gio', 'Ven', 'Sab', 'Dom'];
+
+  // 1. Spese per Giorno (Bar Chart)
+  const ctxDay = document.getElementById('weeklyDayChart').getContext('2d');
+  weeklyDayChartInstance = new Chart(ctxDay, {
+    type: 'bar',
+    data: {
+      labels: dayLabels,
+      datasets: [{
+        label: 'Spesa Giornaliera (€)',
+        data: new Array(7).fill(0),
+        backgroundColor: '#6366f1',
+        borderRadius: 4
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      scales: {
+        y: { beginAtZero: true, grid: { color: gridColor }, ticks: { color: textColor } },
+        x: { grid: { display: false }, ticks: { color: textColor } }
+      },
+      plugins: {
+        legend: { display: false }
+      }
+    }
+  });
+
+  // 2. Categorie Settimana (Doughnut)
+  const ctxCat = document.getElementById('weeklyCategoryChart').getContext('2d');
+  weeklyCategoryChartInstance = new Chart(ctxCat, {
+    type: 'doughnut',
+    data: {
+      labels: [],
+      datasets: [{
+        data: [],
+        backgroundColor: [],
+        borderWidth: 2,
+        borderColor: isDark ? '#1e293b' : '#ffffff'
+      }]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      plugins: {
+        legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 11 }, color: textColor } }
+      },
+      cutout: '70%'
+    }
+  });
+}
+
+function updateWeeklyChartsData(dayExpensesArr, catTotals) {
+  if (!weeklyDayChartInstance || !weeklyCategoryChartInstance) return;
+
+  const isDark = state.darkMode;
+
+  // Aggiorna barre giornaliere
+  weeklyDayChartInstance.data.datasets[0].data = dayExpensesArr;
+  weeklyDayChartInstance.update();
+
+  // Aggiorna ciambella categorie
+  const catLabels = [];
+  const catData = [];
+  const catColors = [];
+
+  Object.keys(catTotals).forEach(catId => {
+    const cat = state.categories.find(c => c.id === catId) || { name: 'Altro', color: '#94a3b8' };
+    catLabels.push(cat.name);
+    catData.push(catTotals[catId]);
+    catColors.push(cat.color || '#94a3b8');
+  });
+
+  if (catData.length === 0) {
+    weeklyCategoryChartInstance.data.labels = ['Nessuna spesa'];
+    weeklyCategoryChartInstance.data.datasets[0].data = [1];
+    weeklyCategoryChartInstance.data.datasets[0].backgroundColor = [isDark ? '#334155' : '#e2e8f0'];
+  } else {
+    weeklyCategoryChartInstance.data.labels = catLabels;
+    weeklyCategoryChartInstance.data.datasets[0].data = catData;
+    weeklyCategoryChartInstance.data.datasets[0].backgroundColor = catColors;
+  }
+  weeklyCategoryChartInstance.data.datasets[0].borderColor = isDark ? '#1e293b' : '#ffffff';
+  weeklyCategoryChartInstance.update();
+}
+
+function updateWeeklyCharts() {
+  if (weeklyDayChartInstance) weeklyDayChartInstance.resize();
+  if (weeklyCategoryChartInstance) weeklyCategoryChartInstance.resize();
 }
 
 // ==========================================
@@ -489,33 +799,47 @@ function setupFilters() {
 function createTxElement(tx, showEditBtn = true) {
   const cat = state.categories.find(c => c.id === tx.category) || { name: 'Altro', icon: 'tag', color: '#64748b' };
   const isExp = tx.type === 'expense';
-  
+  const amountVal = parseAmount(tx.amount);
+
+  const safeTitle = escapeHtml(tx.note) || escapeHtml(cat.name);
+  const safeCatName = escapeHtml(cat.name);
+  const safeDate = formatDate(tx.date);
+  const safeIcon = escapeHtml(cat.icon || 'tag');
+  const safeColor = escapeHtml(cat.color || '#64748b');
+
   const item = document.createElement('div');
   item.className = 'tx-item';
   item.innerHTML = `
     <div class="tx-left">
-      <div class="tx-cat-badge" style="background-color: ${cat.color};">
-        <i data-lucide="${cat.icon || 'tag'}" style="width: 20px; height: 20px;"></i>
+      <div class="tx-cat-badge" style="background-color: ${safeColor};">
+        <i data-lucide="${safeIcon}" style="width: 20px; height: 20px;"></i>
       </div>
       <div class="tx-info">
-        <h4>${tx.note || cat.name}</h4>
-        <span>${cat.name} • ${tx.date}</span>
+        <h4>${safeTitle}</h4>
+        <span>${safeCatName} • ${safeDate}</span>
       </div>
     </div>
     <div class="tx-right">
       <span class="tx-amount ${isExp ? 'expense' : 'income'}">
-        ${isExp ? '-' : '+'}${formatCurrency(tx.amount)}
+        ${isExp ? '-' : '+'}${formatCurrency(amountVal)}
       </span>
       ${showEditBtn ? `
-        <button class="tx-btn" onclick="openEditModal('${tx.id}')" title="Modifica">
+        <button class="tx-btn btn-edit-tx" title="Modifica">
           <i data-lucide="pencil" style="width: 16px; height: 16px;"></i>
         </button>
       ` : ''}
-      <button class="tx-btn btn-danger" onclick="deleteTx('${tx.id}')" title="Elimina">
+      <button class="tx-btn btn-danger btn-del-tx" title="Elimina">
         <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
       </button>
     </div>
   `;
+
+  // Listener nativi: niente stringhe arbitrarie eseguite nell'HTML
+  if (showEditBtn) {
+    item.querySelector('.btn-edit-tx').addEventListener('click', () => openEditModal(tx.id));
+  }
+  item.querySelector('.btn-del-tx').addEventListener('click', () => deleteTx(tx.id));
+
   return item;
 }
 
@@ -531,8 +855,8 @@ window.deleteTx = function(id) {
 // ==========================================
 document.getElementById('txForm').addEventListener('submit', (e) => {
   e.preventDefault();
-  const amount = parseFloat(document.getElementById('txAmount').value);
-  const type = document.getElementById('txType').value;
+  const amount = parseAmount(document.getElementById('txAmount').value);
+  const type = document.getElementById('txType').value === 'income' ? 'income' : 'expense';
   const date = document.getElementById('txDate').value;
   const category = document.getElementById('txCategory').value;
   const note = document.getElementById('txNote').value.trim();
@@ -590,8 +914,8 @@ document.getElementById('editTxForm').addEventListener('submit', (e) => {
   const tx = state.transactions.find(t => t.id === id);
   if (!tx) return;
 
-  tx.type = document.getElementById('editTxType').value;
-  tx.amount = parseFloat(document.getElementById('editTxAmount').value);
+  tx.type = document.getElementById('editTxType').value === 'income' ? 'income' : 'expense';
+  tx.amount = parseAmount(document.getElementById('editTxAmount').value);
   tx.date = document.getElementById('editTxDate').value;
   tx.category = document.getElementById('editTxCategory').value;
   tx.note = document.getElementById('editTxNote').value.trim();
@@ -612,23 +936,33 @@ function renderCategoriesList() {
 
   state.categories.forEach(cat => {
     const txCount = state.transactions.filter(t => t.category === cat.id).length;
+    const safeName = escapeHtml(cat.name);
+    const safeIcon = escapeHtml(cat.icon || 'tag');
+    const safeColor = escapeHtml(cat.color || '#64748b');
+
     const item = document.createElement('div');
     item.className = 'cat-item';
     item.innerHTML = `
       <div class="cat-item-left">
-        <span class="cat-badge-dot" style="background-color: ${cat.color};"></span>
-        <i data-lucide="${cat.icon || 'tag'}" style="width: 18px; height: 18px;"></i>
-        <strong>${cat.name}</strong>
+        <span class="cat-badge-dot" style="background-color: ${safeColor};"></span>
+        <i data-lucide="${safeIcon}" style="width: 18px; height: 18px;"></i>
+        <strong>${safeName}</strong>
       </div>
       <div style="display: flex; align-items: center; gap: 12px;">
         <span class="badge-count">${txCount} moviment${txCount === 1 ? 'o' : 'i'}</span>
         ${cat.id !== 'altro' ? `
-          <button class="tx-btn btn-danger" onclick="deleteCategory('${cat.id}')" title="Elimina Categoria">
+          <button class="tx-btn btn-danger btn-del-cat" title="Elimina Categoria">
             <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
           </button>
         ` : ''}
       </div>
     `;
+
+    const delBtn = item.querySelector('.btn-del-cat');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => deleteCategory(cat.id));
+    }
+
     container.appendChild(item);
   });
   lucide.createIcons();
@@ -680,7 +1014,7 @@ function setupSubscriptionForm() {
   document.getElementById('newSubForm').addEventListener('submit', (e) => {
     e.preventDefault();
     const name = document.getElementById('subName').value.trim();
-    const amount = parseFloat(document.getElementById('subAmount').value);
+    const amount = parseAmount(document.getElementById('subAmount').value);
     const category = document.getElementById('subCategory').value;
     const frequency = document.getElementById('subFrequency').value;
     const billingDay = parseInt(document.getElementById('subBillingDay').value);
@@ -722,7 +1056,8 @@ function renderSubscriptionsList() {
 
   let monthlySum = 0;
   state.subscriptions.forEach(sub => {
-    monthlySum += (sub.frequency === 'monthly') ? sub.amount : (sub.amount / 12);
+    const amt = parseAmount(sub.amount);
+    monthlySum += (sub.frequency === 'monthly') ? amt : (amt / 12);
   });
 
   const yearlySum = monthlySum * 12;
@@ -739,28 +1074,36 @@ function renderSubscriptionsList() {
 
   state.subscriptions.forEach(sub => {
     const cat = state.categories.find(c => c.id === sub.category) || { name: 'Altro', icon: 'repeat', color: '#4f46e5' };
+    const safeName = escapeHtml(sub.name);
+    const safeCatName = escapeHtml(cat.name);
+    const safeIcon = escapeHtml(cat.icon || 'repeat');
+    const safeColor = escapeHtml(cat.color || '#4f46e5');
+    const amountVal = parseAmount(sub.amount);
+
     const item = document.createElement('div');
     item.className = 'tx-item';
     item.innerHTML = `
       <div class="tx-left">
-        <div class="tx-cat-badge" style="background-color: ${cat.color};">
-          <i data-lucide="${cat.icon || 'repeat'}" style="width: 20px; height: 20px;"></i>
+        <div class="tx-cat-badge" style="background-color: ${safeColor};">
+          <i data-lucide="${safeIcon}" style="width: 20px; height: 20px;"></i>
         </div>
         <div class="tx-info">
-          <h4>${sub.name}</h4>
-          <span>${cat.name} • Rinnovo il ${sub.billingDay} del mese (${sub.frequency === 'monthly' ? 'Mensile' : 'Annuale'})</span>
+          <h4>${safeName}</h4>
+          <span>${safeCatName} • Rinnovo il ${parseInt(sub.billingDay, 10)} del mese (${sub.frequency === 'monthly' ? 'Mensile' : 'Annuale'})</span>
         </div>
       </div>
       <div class="tx-right">
         <span class="renewal-badge">${sub.autoAdd ? 'Auto: Sì' : 'Auto: No'}</span>
         <span class="tx-amount expense">
-          -${formatCurrency(sub.amount)}
+          -${formatCurrency(amountVal)}
         </span>
-        <button class="tx-btn btn-danger" onclick="deleteSubscription('${sub.id}')" title="Elimina Abbonamento">
+        <button class="tx-btn btn-danger btn-del-sub" title="Elimina Abbonamento">
           <i data-lucide="trash-2" style="width: 16px; height: 16px;"></i>
         </button>
       </div>
     `;
+
+    item.querySelector('.btn-del-sub').addEventListener('click', () => deleteSubscription(sub.id));
     listEl.appendChild(item);
   });
   lucide.createIcons();
@@ -868,10 +1211,9 @@ function renderAnnualCategoryBreakdown(catTotals, totalExpenses) {
     return;
   }
 
-  // Ordina per spesa decrescente
   const sortedCategories = catIds.map(catId => {
     const cat = state.categories.find(c => c.id === catId) || { name: 'Altro', color: '#64748b', icon: 'tag' };
-    const amount = catTotals[catId];
+    const amount = parseAmount(catTotals[catId]);
     const pct = ((amount / totalExpenses) * 100).toFixed(1);
     const monthlyAvg = amount / 12;
     return { ...cat, amount, pct, monthlyAvg };
@@ -883,9 +1225,9 @@ function renderAnnualCategoryBreakdown(catTotals, totalExpenses) {
     row.innerHTML = `
       <div class="annual-cat-header">
         <div class="annual-cat-title">
-          <span class="cat-badge-dot" style="background-color: ${item.color};"></span>
-          <i data-lucide="${item.icon || 'tag'}" style="width: 17px; height: 17px;"></i>
-          <span>${item.name}</span>
+          <span class="cat-badge-dot" style="background-color: ${escapeHtml(item.color)};"></span>
+          <i data-lucide="${escapeHtml(item.icon || 'tag')}" style="width: 17px; height: 17px;"></i>
+          <span>${escapeHtml(item.name)}</span>
         </div>
         <div class="annual-cat-stats">
           <span class="annual-cat-pct">${item.pct}% del totale (${formatCurrency(item.monthlyAvg)}/mese)</span>
@@ -893,7 +1235,7 @@ function renderAnnualCategoryBreakdown(catTotals, totalExpenses) {
         </div>
       </div>
       <div class="annual-progress-bar-bg">
-        <div class="annual-progress-bar-fill" style="width: ${item.pct}%; background-color: ${item.color};"></div>
+        <div class="annual-progress-bar-fill" style="width: ${item.pct}%; background-color: ${escapeHtml(item.color)};"></div>
       </div>
     `;
     container.appendChild(row);

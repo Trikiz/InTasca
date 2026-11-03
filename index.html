@@ -44,6 +44,9 @@
         <button class="nav-tab" data-view="transactions">
           <i data-lucide="receipt"></i> Movimenti
         </button>
+        <button class="nav-tab" data-view="weekly">
+          <i data-lucide="calendar-days"></i> Report Settimanale
+        </button>
         <button class="nav-tab" data-view="annual">
           <i data-lucide="line-chart"></i> Report Annuale
         </button>
@@ -228,6 +231,100 @@
             </div>
           </div>
         </div>
+      </div>
+      
+    </section>
+
+    <!-- ========================================== -->
+    <!-- VISTA: REPORT SETTIMANALE                  -->
+    <!-- ========================================== -->
+    <section id="view-weekly" class="app-view">
+      <!-- Selettore Settimana -->
+      <div class="period-selector-bar">
+        <div class="period-navigator">
+          <button id="prevWeekBtn" class="btn-icon-only" title="Settimana precedente">
+            <i data-lucide="chevron-left"></i>
+          </button>
+          <div class="period-display">
+            <i data-lucide="calendar-days"></i>
+            <span id="weeklyLabel">Settimana ...</span>
+          </div>
+          <button id="nextWeekBtn" class="btn-icon-only" title="Settimana successiva">
+            <i data-lucide="chevron-right"></i>
+          </button>
+          <button id="currentWeekBtn" class="btn-sm" title="Torna alla settimana corrente">
+            Questa Settimana
+          </button>
+        </div>
+        <div class="period-hint" id="weeklyHint">Riepilogo dei 7 giorni</div>
+      </div>
+
+      <!-- KPI Cards Settimanali -->
+      <div class="summary-grid">
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Uscite Settimana</div>
+            <div class="stat-val val-expense" id="weeklyExpenses">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-expense"><i data-lucide="trending-down"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Entrate Settimana</div>
+            <div class="stat-val val-income" id="weeklyIncome">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-income"><i data-lucide="trending-up"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Risparmio Netto</div>
+            <div class="stat-val" id="weeklyNetSavings">0,00 €</div>
+          </div>
+          <div class="stat-icon icon-balance"><i data-lucide="piggy-bank"></i></div>
+        </div>
+
+        <div class="card stat-card">
+          <div>
+            <div class="stat-label">Media Giornaliera</div>
+            <div class="stat-val" id="weeklyAvgDaily" style="color: #d97706;">0,00 €</div>
+            <span id="weeklyTopDay" class="sub-label-badge" style="background: var(--badge-bg); color: var(--text-muted);">Picco: -</span>
+          </div>
+          <div class="stat-icon icon-avg"><i data-lucide="calendar"></i></div>
+        </div>
+      </div>
+
+      <!-- Grafici Settimanali -->
+      <div class="main-grid">
+        <div class="card">
+          <div class="card-title">
+            <span>Spese per Giorno (Lun - Dom)</span>
+            <i data-lucide="bar-chart-2" class="text-muted"></i>
+          </div>
+          <div class="chart-box" style="height: 270px;">
+            <canvas id="weeklyDayChart"></canvas>
+          </div>
+        </div>
+
+        <div class="card">
+          <div class="card-title">
+            <span>Spese per Categoria (Settimana)</span>
+            <i data-lucide="pie-chart" class="text-muted"></i>
+          </div>
+          <div class="chart-box" style="height: 270px;">
+            <canvas id="weeklyCategoryChart"></canvas>
+          </div>
+        </div>
+      </div>
+
+      <!-- Lista Movimenti della Settimana -->
+      <div class="card">
+        <div class="card-title">
+          <span>Movimenti della Settimana</span>
+          <span id="weeklyTxCount" class="badge-count">0 voci</span>
+        </div>
+        <div class="transactions-list full-list" id="weeklyTxList"></div>
       </div>
     </section>
 
