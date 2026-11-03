@@ -35,6 +35,8 @@ let state = {
   darkMode: false
 };
 
+const APP_VERSION = '0.0.8';
+
 let fileHandle = null;
 
 const currentDate = new Date();
@@ -64,6 +66,10 @@ let weeklyCategoryChartInstance = null;
 window.addEventListener('DOMContentLoaded', () => {
   document.getElementById('txDate').value = new Date().toISOString().split('T')[0];
 
+  // Mostra la versione corrente nel footer
+  const verEl = document.getElementById('appVersion');
+  if (verEl) verEl.textContent = `v${APP_VERSION}`;
+
   const saved = localStorage.getItem('intasca_data') || localStorage.getItem('mie_finanze_data');
   if (saved) {
     try {
@@ -88,6 +94,7 @@ window.addEventListener('DOMContentLoaded', () => {
   setupFileSystemSync();
   setupSubscriptionForm();
   populateCategorySelects();
+  setupCategoryModals();
   setupWeeklyPeriodSelector();
   initDashboardCharts();
   initAnnualCharts();
@@ -930,6 +937,7 @@ document.getElementById('editTxForm').addEventListener('submit', (e) => {
 function renderCategoriesList() {
   const container = document.getElementById('catListContainer');
   const countEl = document.getElementById('catCount');
+  if (!container) return;
   container.innerHTML = '';
 
   countEl.textContent = `${state.categories.length} categorie`;
@@ -950,18 +958,18 @@ function renderCategoriesList() {
       </div>
       <div style="display: flex; align-items: center; gap: 8px;">
         <span class="badge-count">${txCount} moviment${txCount === 1 ? 'o' : 'i'}</span>
-        <button class="tx-btn btn-edit-cat" title="Modifica Categoria">
+        <button type="button" class="tx-btn btn-edit-cat" title="Modifica Categoria">
           <i data-lucide="pencil" style="width: 15px; height: 15px;"></i>
         </button>
         ${cat.id !== 'altro' ? `
-          <button class="tx-btn btn-danger btn-del-cat" title="Elimina Categoria">
+          <button type="button" class="tx-btn btn-danger btn-del-cat" title="Elimina Categoria">
             <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
           </button>
         ` : ''}
       </div>
     `;
 
-    // Listener per modifica ed eliminazione
+    // Listener diretti
     item.querySelector('.btn-edit-cat').addEventListener('click', () => openEditCatModal(cat.id));
 
     const delBtn = item.querySelector('.btn-del-cat');
@@ -972,6 +980,74 @@ function renderCategoriesList() {
     container.appendChild(item);
   });
   lucide.createIcons();
+}
+
+// Logica Finestra Modale Modifica Categoria
+window.openEditCatModal = function(catId) {
+  const modal = document.getElementById('editCatModal');
+  if (!modal) return;
+  const cat = state.categories.find(c => c.id === catId);
+  if (!cat) return;
+
+  document.getElementById('editCatId').value = cat.id;
+  document.getElementById('editCatName').value = cat.name;
+  document.getElementById('editCatColor').value = cat.color || '#6366f1';
+  document.getElementById('editCatIcon').value = cat.icon || 'tag';
+
+  modal.classList.add('open');
+  lucide.createIcons();
+};
+
+window.closeEditCatModal = function() {
+  const modal = document.getElementById('editCatModal');
+  if (modal) modal.classList.remove('open');
+};
+
+function setupCategoryModals() {
+  const editCatForm = document.getElementById('editCatForm');
+  if (editCatForm) {
+    editCatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const id = document.getElementById('editCatId').value;
+      const cat = state.categories.find(c => c.id === id);
+      if (!cat) return;
+
+      const newName = document.getElementById('editCatName').value.trim();
+      if (!newName) return;
+
+      cat.name = newName;
+      cat.color = document.getElementById('editCatColor').value;
+      cat.icon = document.getElementById('editCatIcon').value;
+
+      closeEditCatModal();
+      populateCategorySelects();
+      refreshApp();
+    });
+  }
+
+  const newCatForm = document.getElementById('newCatForm');
+  if (newCatForm) {
+    newCatForm.addEventListener('submit', (e) => {
+      e.preventDefault();
+      const name = document.getElementById('catName').value.trim();
+      const color = document.getElementById('catColor').value;
+      const icon = document.getElementById('catIcon').value;
+
+      if (!name) return;
+
+      const id = name.toLowerCase().replace(/\s+/g, '-').replace(/[^a-z0-9-]/g, '') || Date.now().toString();
+
+      if (state.categories.some(c => c.id === id)) {
+        alert('Esiste già una categoria con questo nome!');
+        return;
+      }
+
+      state.categories.push({ id, name, color, icon });
+      document.getElementById('catName').value = '';
+      populateCategorySelects();
+      refreshApp();
+    });
+  }
 }
 
 // Logica Finestra Modale Modifica Categoria
