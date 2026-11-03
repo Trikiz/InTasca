@@ -35,7 +35,12 @@ let state = {
   darkMode: false
 };
 
-const APP_VERSION = '0.0.8';
+const APP_VERSION = '0.0.9';
+
+// Stato interno per l'importatore CSV
+let rawCsvRows = [];
+let csvHeaders = [];
+let preparedCsvTransactions = [];
 
 let fileHandle = null;
 
@@ -1871,3 +1876,297 @@ document.getElementById('fileInput').addEventListener('change', (event) => {
   };
   reader.readAsText(file);
 });
+
+// ==========================================
+// IMPORTAZIONE ESTRATTI CONTO CSV (PAPA PARSE)
+// ==========================================
+
+const csvModal = document.getElementById('csvModal');
+const csvFileInput = document.getElementById('csvFileInput');
+
+// Apertura / Chiusura Modale
+document.getElementById('openCsvModalBtn').addEventListener('click', () => {
+  goToCsvStep(1);
+  if (csvModal) csvModal.classList.add('open');
+  lucide.createIcons();
+});
+
+window.closeCsvModal = function() {
+  if (csvModal) csvModal.classList.remove('open');
+  if (csvFileInput) csvFileInput.value = '';
+  rawCsvRows = [];
+  csvHeaders = [];
+  preparedCsvTransactions = [];
+};
+
+// Navigazione a Step del Wizard
+function goToCsvStep(stepNumber) {
+  document.getElementById('csvStep1').style.display = (stepNumber === 1) ? 'block' : 'none';
+  document.getElementById('csvStep2').style.display = (stepNumber === 2) ? 'block' : 'none';
+  document.getElementById('csvStep3').style.display = (stepNumber === 3) ? 'block' : 'none';
+
+  document.getElementById('csvStepBadge1').classList.toggle('active', stepNumber === 1);
+  document.getElementById('csvStepBadge2').classList.toggle('active', stepNumber === 2);
+  document.getElementById('csvStepBadge3').classList.toggle('active', stepNumber === 3);
+
+  lucide.createIcons();
+}
+
+// Gestione selezione del file CSV tramite PapaParse
+if (csvFileInput) {
+  csvFileInput.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    Papa.parse(file, {
+      header: true,
+      skipEmptyLines: 'greedy',
+      complete: function(results) {
+        if (!results.data || results.data.length === 0) {
+          alert('Il file CSV selezionato sembra vuoto o non leggibile.');
+          return;
+        }
+
+        rawCsvRows = results.data;
+        csvHeaders = results.meta.fields || Object.keys(results.data[0]);
+
+        populateCsvColumnSelectors();
+        goToCsvStep(2);
+      },
+      error: function(err) {
+        alert('Errore durante la lettura del file CSV: ' + err.message);
+      }
+    });
+  });
+}
+
+// Popola le tendine di mappatura colonne con i nomi trovati nel file
+function populateCsvColumnSelectors() {
+  const dateSel = document.getElementById('csvColDate');
+  const noteSel = document.getElementById('csvColNote');
+  const amountSel = document.getElementById('csvColAmount');
+  const expSel = document.getElementById('csvColExpense');
+  const incSel = document.getElementById('csvColIncome');
+  const catSel = document.getElementById('csvDefaultCategory');
+
+  const selects = [dateSel, noteSel, amountSel, expSel, incSel];
+  selects.forEach(sel => {
+    sel.innerHTML = '';
+    csvHeaders.forEach(h => {
+      const opt = document.createElement('option');
+      opt.value = h;
+      opt.textContent = h;
+      sel.appendChild(opt);
+    });
+  });
+
+  // Rilevamento automatico intelligente dei campi più comuni usati dalle banche
+  autoSelectBestMatch(dateSel, ['data', 'date', 'contabile', 'operazione', 'valuta']);
+  autoSelectBestMatch(noteSel, ['descrizione', 'causale', 'nota', 'beneficiario', 'dettaglio', 'description']);
+  autoSelectBestMatch(amountSel, ['importo', 'amount', 'totale', 'saldo']);
+  autoSelectBestMatch(expSel, ['uscite', 'addebiti', 'dare', 'debit', 'expense']);
+  autoSelectBestMatch(incSel, ['entrate', 'accrediti', 'avere', 'credit', 'income']);
+
+  // Popola la categoria di default
+  catSel.innerHTML = '';
+  state.categories.forEach(c => {
+    const opt = document.createElement('option');
+    opt.value = c.id;
+    opt.textContent = c.name;
+    if (c.id === 'altro') opt.selected = true;
+    catSel.appendChild(opt);
+  });
+}
+
+function autoSelectBestMatch(selectEl, keywords) {
+  for (let opt of selectEl.options) {
+    const txt = opt.value.toLowerCase();
+    if (keywords.some(k => txt.includes(k))) {
+      selectEl.value = opt.value;
+      break;
+    }
+  }
+}
+
+// Toggle tra Colonna Importo Unica e Due Colonne Separate
+document.getElementById('csvAmountMode').addEventListener('change', (e) => {
+  const isDouble = (e.target.value === 'double');
+  document.getElementById('csvSingleAmountGroup').style.display = isDouble ? 'none' : 'flex';
+  document.getElementById('csvDoubleAmountGroup').style.display = isDouble ? 'grid' : 'none';
+});
+
+// Conversione e pulizia data da formati bancari a standard YYYY-MM-DD
+function parseCsvDate(dateStr, format) {
+  if (!dateStr) return '';
+  const clean = String(dateStr).trim();
+  const sep = clean.includes('/') ? '/' : (clean.includes('-') ? '-' : '.');
+  const parts = clean.split(sep);
+
+  if (parts.length < 3) return '';
+
+  let y, m, d;
+  if (format === 'DD/MM/YYYY' || format === 'DD-MM-YYYY') {
+    d = parts[0].padStart(2, '0');
+    m = parts[1].padStart(2, '0');
+    y = parts[2].length === 2 ? '20' + parts[2] : parts[2];
+  } else {
+    // YYYY-MM-DD
+    y = parts[0];
+    m = parts[1].padStart(2, '0');
+    d = parts[2].padStart(2, '0');
+  }
+
+  // Verifica validità data
+  const test = new Date(`${y}-${m}-${d}T00:00:00`);
+  return isNaN(test.getTime()) ? '' : `${y}-${m}-${d}`;
+}
+
+// STEP 3: Genera l'anteprima e identifica i possibili duplicati
+function generateCsvPreview() {
+  const dateCol = document.getElementById('csvColDate').value;
+  const dateFormat = document.getElementById('csvDateFormat').value;
+  const noteCol = document.getElementById('csvColNote').value;
+  const amountMode = document.getElementById('csvAmountMode').value;
+  const defaultCategory = document.getElementById('csvDefaultCategory').value;
+
+  preparedCsvTransactions = [];
+
+  rawCsvRows.forEach((row, index) => {
+    const isoDate = parseCsvDate(row[dateCol], dateFormat);
+    if (!isoDate) return; // Salta righe senza data valida
+
+    const rawNote = row[noteCol] || 'Movimento importato';
+    let type = 'expense';
+    let amount = 0;
+
+    if (amountMode === 'single') {
+      const col = document.getElementById('csvColAmount').value;
+      const rawVal = String(row[col] || '0').trim();
+      const isNegative = rawVal.includes('-') || (rawVal.startsWith('(') && rawVal.endsWith(')'));
+      
+      amount = parseAmount(rawVal);
+      type = isNegative ? 'expense' : 'income';
+    } else {
+      const expCol = document.getElementById('csvColExpense').value;
+      const incCol = document.getElementById('csvColIncome').value;
+
+      const expVal = parseAmount(row[expCol]);
+      const incVal = parseAmount(row[incCol]);
+
+      if (expVal > 0) {
+        amount = expVal;
+        type = 'expense';
+      } else if (incVal > 0) {
+        amount = incVal;
+        type = 'income';
+      }
+    }
+
+    if (amount <= 0) return; // Salta importi nulli
+
+    // Controllo duplicati: stessa data e stesso importo esatto
+    const isDuplicate = state.transactions.some(tx => {
+      return tx.date === isoDate && Math.abs(tx.amount - amount) < 0.001;
+    });
+
+    preparedCsvTransactions.push({
+      tempId: 'csv_' + index,
+      selected: !isDuplicate, // Deselezionato in automatico se è un probabile duplicato
+      isDuplicate,
+      date: isoDate,
+      type,
+      amount,
+      category: defaultCategory,
+      note: rawNote.trim()
+    });
+  });
+
+  renderCsvPreviewTable();
+  goToCsvStep(3);
+}
+
+function renderCsvPreviewTable() {
+  const tbody = document.getElementById('csvPreviewBody');
+  const summaryEl = document.getElementById('csvPreviewSummary');
+  tbody.innerHTML = '';
+
+  const total = preparedCsvTransactions.length;
+  const duplicates = preparedCsvTransactions.filter(t => t.isDuplicate).length;
+  summaryEl.textContent = `${total} movimenti rilevati (${duplicates} possibil${duplicates === 1 ? 'e duplicato' : 'i duplicati'})`;
+
+  if (total === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty-state">Nessuna transazione valida ricavata con i parametri scelti.</td></tr>';
+    return;
+  }
+
+  preparedCsvTransactions.forEach(item => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td style="text-align: center;">
+        <input type="checkbox" class="csv-row-check" ${item.selected ? 'checked' : ''} style="cursor: pointer; width: 16px; height: 16px;">
+      </td>
+      <td>${formatDate(item.date)}</td>
+      <td><strong>${escapeHtml(item.note)}</strong></td>
+      <td>
+        <select class="csv-row-cat" style="padding: 4px 6px; font-size: 0.75rem;">
+          ${state.categories.map(c => `
+            <option value="${c.id}" ${c.id === item.category ? 'selected' : ''}>${escapeHtml(c.name)}</option>
+          `).join('')}
+        </select>
+      </td>
+      <td style="text-align: right; font-weight: 700;" class="${item.type === 'expense' ? 'val-expense' : 'val-income'}">
+        ${item.type === 'expense' ? '-' : '+'}${formatCurrency(item.amount)}
+      </td>
+      <td>
+        ${item.isDuplicate 
+          ? '<span class="badge-duplicate">Possibile duplicato</span>' 
+          : '<span class="badge-new">Nuovo</span>'}
+      </td>
+    `;
+
+    // Listener spunta riga
+    tr.querySelector('.csv-row-check').addEventListener('change', (e) => {
+      item.selected = e.target.checked;
+    });
+
+    // Listener cambio categoria singola riga
+    tr.querySelector('.csv-row-cat').addEventListener('change', (e) => {
+      item.category = e.target.value;
+    });
+
+    tbody.appendChild(tr);
+  });
+}
+
+window.toggleAllCsvRows = function(checkAll) {
+  preparedCsvTransactions.forEach(t => t.selected = checkAll);
+  document.querySelectorAll('.csv-row-check').forEach(cb => cb.checked = checkAll);
+};
+
+// Conferma definitiva e salvataggio nello storico
+window.applyCsvImport = function() {
+  const toImport = preparedCsvTransactions.filter(t => t.selected);
+  if (toImport.length === 0) {
+    alert('Nessun movimento selezionato per l\'importazione.');
+    return;
+  }
+
+  const baseTimestamp = Date.now();
+  toImport.forEach((item, idx) => {
+    state.transactions.unshift({
+      id: 'tx_csv_' + (baseTimestamp + idx).toString(),
+      date: item.date,
+      type: item.type,
+      amount: item.amount,
+      category: item.category,
+      note: item.note
+    });
+  });
+
+  // Riordina lo storico per data decrescente
+  state.transactions.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  closeCsvModal();
+  refreshApp();
+  alert(`Importazione completata con successo! Aggiunti ${toImport.length} nuovi movimenti.`);
+};

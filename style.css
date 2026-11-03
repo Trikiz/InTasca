@@ -823,3 +823,117 @@ body.dark .renewal-badge {
 .footer-dot {
   opacity: 0.5;
 }
+
+/* ==========================================
+   WIZARD IMPORTAZIONE CSV
+   ========================================== */
+.modal-content.modal-lg {
+  max-width: 820px;
+  width: 95%;
+}
+
+.csv-wizard-steps {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 18px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.csv-step-badge {
+  flex: 1;
+  text-align: center;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--badge-bg);
+  color: var(--text-muted);
+  font-size: 0.8125rem;
+  font-weight: 600;
+}
+
+.csv-step-badge.active {
+  background: var(--primary);
+  color: white;
+}
+
+.csv-drop-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  border: 2px dashed var(--border);
+  border-radius: var(--radius);
+  background: var(--input-bg);
+  text-align: center;
+  transition: border-color 0.2s ease;
+}
+
+.csv-drop-box:hover {
+  border-color: var(--primary);
+}
+
+.csv-table-wrapper {
+  max-height: 380px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.csv-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.8125rem;
+}
+
+.csv-table th {
+  position: sticky;
+  top: 0;
+  background: var(--badge-bg);
+  color: var(--text);
+  padding: 10px 12px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+  z-index: 2;
+}
+
+.csv-table td {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+
+.csv-table tr:hover {
+  background: var(--badge-bg);
+}
+
+.badge-duplicate {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+body.dark .badge-duplicate {
+  background: #78350f;
+  color: #fde68a;
+}
+
+.badge-new {
+  display: inline-block;
+  font-size: 0.72rem;
+  font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #d1fae5;
+  color: #065f46;
+}
+
+body.dark .badge-new {
+  background: #064e3b;
+  color: #a7f3d0;
+}

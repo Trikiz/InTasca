@@ -1,4 +1,4 @@
-const CACHE_NAME = 'intasca-v0.0.8';
+const CACHE_NAME = 'intasca-v0.0.9';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',
@@ -8,7 +8,8 @@ const ASSETS_TO_CACHE = [
   './icon-192.png',
   './icon-512.png',
   'https://unpkg.com/lucide@latest',
-  'https://cdn.jsdelivr.net/npm/chart.js'
+  'https://cdn.jsdelivr.net/npm/chart.js',
+  'https://cdn.jsdelivr.net/npm/papaparse@5.4.1/papaparse.min.js'
 ];
 
 self.addEventListener('install', (event) => {
