@@ -1,4 +1,4 @@
-const CACHE_NAME = 'intasca-v6';
+const CACHE_NAME = 'intasca-v7';
 const ASSETS_TO_CACHE = [
   './',
   './index.html',

@@ -586,17 +586,35 @@
               <div class="form-group">
                 <label for="catIcon">Icona</label>
                 <select id="catIcon">
-                  <option value="shopping-cart">🛒 Spesa / Carrello</option>
-                  <option value="home">🏠 Casa</option>
-                  <option value="car">🚗 Auto / Trasporti</option>
+                  <option value="shopping-cart">🛒 Spesa / Supermercato</option>
                   <option value="utensils">🍽️ Ristorante / Cibo</option>
-                  <option value="heart-pulse">💊 Salute</option>
-                  <option value="shopping-bag">🛍️ Shopping</option>
+                  <option value="coffee">☕ Bar / Caffè</option>
+                  <option value="home">🏠 Casa / Affitto</option>
+                  <option value="zap">⚡ Bollette / Utenze</option>
+                  <option value="wifi">📶 Internet / Telefono</option>
+                  <option value="wrench">🔧 Manutenzione / Riparazioni</option>
+                  <option value="car">🚗 Auto / Trasporti</option>
+                  <option value="fuel">⛽ Carburante / Rifornimento</option>
+                  <option value="train">🚆 Mezzi pubblici / Treni</option>
+                  <option value="plane">✈️ Viaggi / Voli</option>
                   <option value="gamepad-2">🎮 Giochi / Svago</option>
                   <option value="tv">📺 Streaming / TV</option>
-                  <option value="plane">✈️ Viaggi</option>
+                  <option value="film">🎬 Cinema / Spettacoli</option>
+                  <option value="music">🎵 Musica / Concerti</option>
+                  <option value="shopping-bag">🛍️ Shopping / Acquisti</option>
+                  <option value="shirt">👕 Abbigliamento</option>
+                  <option value="scissors">✂️ Cura personale / Bellezza</option>
+                  <option value="gift">🎁 Regali / Pensieri</option>
+                  <option value="heart-pulse">💊 Salute / Farmacia</option>
+                  <option value="dumbbell">🏋️ Palestra / Sport</option>
                   <option value="book-open">📚 Studio / Libri</option>
+                  <option value="graduation-cap">🎓 Formazione / Corsi</option>
                   <option value="banknote">💰 Denaro / Entrate</option>
+                  <option value="credit-card">💳 Banche / Carte</option>
+                  <option value="piggy-bank">🐷 Risparmio / Investimenti</option>
+                  <option value="shield-check">🛡️ Assicurazioni</option>
+                  <option value="paw-print">🐾 Animali domestici</option>
+                  <option value="baby">👶 Famiglia / Figli</option>
                   <option value="tag">🏷️ Tag Generico</option>
                 </select>
               </div>
@@ -674,5 +692,76 @@
 
   <!-- Logica JavaScript -->
   <script src="app.js"></script>
+
+  <!-- ========================================== -->
+  <!-- MODALE MODIFICA CATEGORIA                  -->
+  <!-- ========================================== -->
+  <div id="editCatModal" class="modal-backdrop">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3>Modifica Categoria</h3>
+        <button type="button" class="btn-close" onclick="closeEditCatModal()">
+          <i data-lucide="x"></i>
+        </button>
+      </div>
+
+      <form id="editCatForm">
+        <input type="hidden" id="editCatId">
+
+        <div class="form-group">
+          <label for="editCatName">Nome Categoria</label>
+          <input type="text" id="editCatName" required>
+        </div>
+
+        <div class="form-row">
+          <div class="form-group">
+            <label for="editCatColor">Colore Badge</label>
+            <input type="color" id="editCatColor" class="color-picker-input">
+          </div>
+          <div class="form-group">
+            <label for="editCatIcon">Icona</label>
+            <select id="editCatIcon">
+              <option value="shopping-cart">🛒 Spesa / Supermercato</option>
+              <option value="utensils">🍽️ Ristorante / Cibo</option>
+              <option value="coffee">☕ Bar / Caffè</option>
+              <option value="home">🏠 Casa / Affitto</option>
+              <option value="zap">⚡ Bollette / Utenze</option>
+              <option value="wifi">📶 Internet / Telefono</option>
+              <option value="wrench">🔧 Manutenzione / Riparazioni</option>
+              <option value="car">🚗 Auto / Trasporti</option>
+              <option value="fuel">⛽ Carburante / Rifornimento</option>
+              <option value="train">🚆 Mezzi pubblici / Treni</option>
+              <option value="plane">✈️ Viaggi / Voli</option>
+              <option value="gamepad-2">🎮 Giochi / Svago</option>
+              <option value="tv">📺 Streaming / TV</option>
+              <option value="film">🎬 Cinema / Spettacoli</option>
+              <option value="music">🎵 Musica / Concerti</option>
+              <option value="shopping-bag">🛍️ Shopping / Acquisti</option>
+              <option value="shirt">👕 Abbigliamento</option>
+              <option value="scissors">✂️ Cura personale / Bellezza</option>
+              <option value="gift">🎁 Regali / Pensieri</option>
+              <option value="heart-pulse">💊 Salute / Farmacia</option>
+              <option value="dumbbell">🏋️ Palestra / Sport</option>
+              <option value="book-open">📚 Studio / Libri</option>
+              <option value="graduation-cap">🎓 Formazione / Corsi</option>
+              <option value="banknote">💰 Denaro / Entrate</option>
+              <option value="credit-card">💳 Banche / Carte</option>
+              <option value="piggy-bank">🐷 Risparmio / Investimenti</option>
+              <option value="shield-check">🛡️ Assicurazioni</option>
+              <option value="paw-print">🐾 Animali domestici</option>
+              <option value="baby">👶 Famiglia / Figli</option>
+              <option value="tag">🏷️ Tag Generico</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" onclick="closeEditCatModal()">Annulla</button>
+          <button type="submit" class="btn-primary">Salva Modifiche</button>
+        </div>
+      </form>
+    </div>
+  </div>
+  
 </body>
 </html>

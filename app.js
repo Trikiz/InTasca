@@ -948,8 +948,11 @@ function renderCategoriesList() {
         <i data-lucide="${safeIcon}" style="width: 18px; height: 18px;"></i>
         <strong>${safeName}</strong>
       </div>
-      <div style="display: flex; align-items: center; gap: 12px;">
+      <div style="display: flex; align-items: center; gap: 8px;">
         <span class="badge-count">${txCount} moviment${txCount === 1 ? 'o' : 'i'}</span>
+        <button class="tx-btn btn-edit-cat" title="Modifica Categoria">
+          <i data-lucide="pencil" style="width: 15px; height: 15px;"></i>
+        </button>
         ${cat.id !== 'altro' ? `
           <button class="tx-btn btn-danger btn-del-cat" title="Elimina Categoria">
             <i data-lucide="trash-2" style="width: 15px; height: 15px;"></i>
@@ -957,6 +960,9 @@ function renderCategoriesList() {
         ` : ''}
       </div>
     `;
+
+    // Listener per modifica ed eliminazione
+    item.querySelector('.btn-edit-cat').addEventListener('click', () => openEditCatModal(cat.id));
 
     const delBtn = item.querySelector('.btn-del-cat');
     if (delBtn) {
@@ -967,6 +973,45 @@ function renderCategoriesList() {
   });
   lucide.createIcons();
 }
+
+// Logica Finestra Modale Modifica Categoria
+const editCatModal = document.getElementById('editCatModal');
+
+window.openEditCatModal = function(catId) {
+  const cat = state.categories.find(c => c.id === catId);
+  if (!cat) return;
+
+  document.getElementById('editCatId').value = cat.id;
+  document.getElementById('editCatName').value = cat.name;
+  document.getElementById('editCatColor').value = cat.color || '#6366f1';
+  document.getElementById('editCatIcon').value = cat.icon || 'tag';
+
+  editCatModal.classList.add('open');
+  lucide.createIcons();
+};
+
+window.closeEditCatModal = function() {
+  if (editCatModal) editCatModal.classList.remove('open');
+};
+
+document.getElementById('editCatForm').addEventListener('submit', (e) => {
+  e.preventDefault();
+  const id = document.getElementById('editCatId').value;
+  const cat = state.categories.find(c => c.id === id);
+  if (!cat) return;
+
+  const newName = document.getElementById('editCatName').value.trim();
+  if (!newName) return;
+
+  // Aggiorna le proprietà mantenendo lo stesso ID
+  cat.name = newName;
+  cat.color = document.getElementById('editCatColor').value;
+  cat.icon = document.getElementById('editCatIcon').value;
+
+  closeEditCatModal();
+  populateCategorySelects();
+  refreshApp();
+});
 
 document.getElementById('newCatForm').addEventListener('submit', (e) => {
   e.preventDefault();
